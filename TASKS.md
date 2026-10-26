@@ -115,8 +115,11 @@ dashboard, all responsive on phone and desktop at $0 recurring cost.
     transactions; verified to fail when category scoping is removed). Checked in a browser at 375 px and 1280 px.
   - Review fix: the default month is the owner's local month. The browser reports its IANA time zone in a cookie and
     the server renders with it (a saved setting would win; invalid values fall back to UTC); stored dates are unchanged.
+    6 unit tests (month and year boundaries, positive, negative and half-hour offsets, daylight saving, invalid zones)
+    and 1 integration test.
   - Follow-ups: transfer and card-payment legs are not linked (Task 10 pairing); a time zone setting in Settings is
-    still to come (the browser's zone is used until then); no search or pagination within a month (Phase 2).
+    still to come (the browser's zone is used until then); no search or pagination within a month (Phase 2); Server
+    Actions have no tests of their own (the services they call are tested).
 - [ ] **8. Production deploy** (milestone A: technical deployment): Vercel Hobby + Neon production project, PWA basics,
       testing state
   - Acceptance:
