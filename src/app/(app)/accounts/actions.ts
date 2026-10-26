@@ -8,8 +8,8 @@ import {
   parseBalanceForm,
   type AccountField,
   type BalanceField,
-  type FieldErrors,
 } from "@/lib/account-forms";
+import { formValues, type FormState } from "@/lib/form-state";
 import { requireUser } from "@/server/auth/session";
 import { getPrisma } from "@/server/db/client";
 import {
@@ -28,17 +28,6 @@ import {
  * checks the session itself and passes the session's user id; an account id from the client is only ever looked up
  * together with that user id. Expected failures come back as values for the form to show.
  */
-
-export type FormState<Field extends string> =
-  | { status: "idle" }
-  | { status: "saved"; message: string }
-  | {
-      status: "error";
-      fieldErrors: FieldErrors<Field>;
-      formError?: string;
-      /** What was submitted, so the form can show it again (React resets forms after an action). */
-      values: Record<string, string>;
-    };
 
 export type AccountFormState = FormState<AccountField>;
 export type BalanceFormState =
@@ -60,16 +49,6 @@ const FAILURE_MESSAGES: Record<AccountFailure, string> = {
     "This account has recorded history, so it can't be deleted. Archive it instead to keep the history.",
 };
 
-function submittedValues(formData: FormData): Record<string, string> {
-  const values: Record<string, string> = {};
-  for (const [key, value] of formData) {
-    if (typeof value === "string" && !key.startsWith("$")) {
-      values[key] = value;
-    }
-  }
-  return values;
-}
-
 function refreshApp(): void {
   // Account names and balances appear across the app (overview, lists, detail pages).
   revalidatePath("/", "layout");
@@ -85,7 +64,7 @@ export async function createAccountAction(
     return {
       status: "error",
       fieldErrors: parsed.fieldErrors,
-      values: submittedValues(formData),
+      values: formValues(formData),
     };
   }
   const result = await createAccount(getPrisma(), user.id, parsed.data);
@@ -94,7 +73,7 @@ export async function createAccountAction(
       status: "error",
       fieldErrors: {},
       formError: FAILURE_MESSAGES[result.reason],
-      values: submittedValues(formData),
+      values: formValues(formData),
     };
   }
   refreshApp();
@@ -112,7 +91,7 @@ export async function updateAccountAction(
     return {
       status: "error",
       fieldErrors: parsed.fieldErrors,
-      values: submittedValues(formData),
+      values: formValues(formData),
     };
   }
   const result = await updateAccount(
@@ -132,7 +111,7 @@ export async function updateAccountAction(
         result.reason === "type-locked"
           ? undefined
           : FAILURE_MESSAGES[result.reason],
-      values: submittedValues(formData),
+      values: formValues(formData),
     };
   }
   refreshApp();
@@ -152,7 +131,7 @@ export async function recordBalanceAction(
       status: "error",
       fieldErrors: {},
       formError: FAILURE_MESSAGES["not-found"],
-      values: submittedValues(formData),
+      values: formValues(formData),
     };
   }
   const parsed = parseBalanceForm(type, formData);
@@ -160,7 +139,7 @@ export async function recordBalanceAction(
     return {
       status: "error",
       fieldErrors: parsed.fieldErrors,
-      values: submittedValues(formData),
+      values: formValues(formData),
     };
   }
   const result = await recordBalance(prisma, user.id, accountId, parsed.data, {
@@ -171,7 +150,7 @@ export async function recordBalanceAction(
     return {
       status: "confirm-replace",
       existingCents: result.existingCents,
-      values: submittedValues(formData),
+      values: formValues(formData),
     };
   }
   if (!result.ok) {
@@ -179,7 +158,7 @@ export async function recordBalanceAction(
       status: "error",
       fieldErrors: {},
       formError: FAILURE_MESSAGES[result.reason],
-      values: submittedValues(formData),
+      values: formValues(formData),
     };
   }
   refreshApp();
