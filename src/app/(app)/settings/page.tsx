@@ -1,4 +1,9 @@
-import { ChevronRightIcon, ShieldCheckIcon } from "lucide-react";
+import {
+  ChevronRightIcon,
+  ShieldCheckIcon,
+  TagsIcon,
+  type LucideIcon,
+} from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
@@ -44,26 +49,50 @@ async function SettingsContent() {
         </CardContent>
       </Card>
 
-      <Card className="py-0">
-        <Link
+      <Card className="gap-0 divide-y py-0">
+        <SettingsLink
+          href="/settings/categories"
+          icon={TagsIcon}
+          title="Categories"
+          description="Spending and income categories, essential or not"
+        />
+        <SettingsLink
           href="/settings/security"
-          className="flex items-center gap-4 px-4 py-4 outline-none hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset"
-        >
-          <span className="flex size-10 items-center justify-center rounded-lg bg-muted">
-            <ShieldCheckIcon
-              className="size-5 text-muted-foreground"
-              aria-hidden
-            />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block font-medium">Security</span>
-            <span className="block text-sm text-muted-foreground">
-              Two-factor authentication and signed-in devices
-            </span>
-          </span>
-          <ChevronRightIcon className="text-muted-foreground" aria-hidden />
-        </Link>
+          icon={ShieldCheckIcon}
+          title="Security"
+          description="Two-factor authentication and signed-in devices"
+        />
       </Card>
     </div>
+  );
+}
+
+function SettingsLink({
+  href,
+  icon: Icon,
+  title,
+  description,
+}: {
+  href: string;
+  icon: LucideIcon;
+  title: string;
+  description: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="flex items-center gap-4 px-4 py-4 outline-none hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset"
+    >
+      <span className="flex size-10 items-center justify-center rounded-lg bg-muted">
+        <Icon className="size-5 text-muted-foreground" aria-hidden />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block font-medium">{title}</span>
+        <span className="block text-sm text-muted-foreground">
+          {description}
+        </span>
+      </span>
+      <ChevronRightIcon className="text-muted-foreground" aria-hidden />
+    </Link>
   );
 }
