@@ -17,6 +17,8 @@ const REQUIRED_SUITES = [
   "src/lib/contributions.test.ts",
   "src/lib/accounts.test.ts",
   "src/lib/account-forms.test.ts",
+  "src/lib/transactions.test.ts",
+  "src/lib/transaction-forms.test.ts",
   "src/server/db/environment.test.ts",
   "src/server/env.test.ts",
   "src/server/synthetic/generate.test.ts",
@@ -33,6 +35,7 @@ const REQUIRED_SUITES = [
   "tests/integration/auth.test.ts",
   "tests/integration/auth-api.test.ts",
   "tests/integration/accounts.test.ts",
+  "tests/integration/transactions.test.ts",
 ] as const;
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
