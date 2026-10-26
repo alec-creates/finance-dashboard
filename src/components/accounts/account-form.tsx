@@ -6,6 +6,7 @@ import { useActionState, useState } from "react";
 import type { AccountFormState } from "@/app/(app)/accounts/actions";
 import { FormError } from "@/components/auth/auth-card";
 import { describedBy, Field, fieldIds } from "@/components/forms/field";
+import { useVisibleErrors } from "@/components/forms/use-visible-errors";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -66,7 +67,12 @@ export function AccountForm({
   const [state, formAction, pending] = useActionState(action, {
     status: "idle",
   });
-  const errors = state.status === "error" ? state.fieldErrors : {};
+  // A changed type also settles errors about the investment kind and the minimum balance.
+  const { errors, onChange } = useVisibleErrors(
+    state,
+    state.status === "error" ? state.fieldErrors : {},
+    { type: ["investmentType", "minimumBalance"] },
+  );
   const submitted = state.status === "error" ? state.values : null;
   const value = (field: keyof AccountFormDefaults & string): string =>
     submitted ? (submitted[field] ?? "") : String(defaults[field]);
@@ -79,7 +85,12 @@ export function AccountForm({
   const typeChoices = allowedTypes ?? null;
 
   return (
-    <form action={formAction} className="space-y-6" noValidate>
+    <form
+      action={formAction}
+      onChange={onChange}
+      className="space-y-6"
+      noValidate
+    >
       <div className="grid gap-5 sm:grid-cols-2">
         <div className="sm:col-span-2">
           <Field name="name" label="Account name" error={errors.name}>
