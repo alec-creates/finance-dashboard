@@ -446,16 +446,26 @@ export async function deleteAccount(
   });
 }
 
+/** A manual entry already exists for the date; carries its amount so the owner can decide. */
+export interface ExistingManualEntry {
+  ok: false;
+  reason: "exists";
+  /** Signed balance, or the investment total. */
+  existingCents: number;
+}
+
 /**
- * Records the owner's balance for a date. A second manual entry for the same date replaces the first; entries from
- * statements or providers are never touched. Returns whether an entry was replaced.
+ * Records the owner's balance for a date. If a manual entry already exists for that date, it is replaced only when
+ * `replaceExisting` is set; otherwise nothing changes and the existing amount is returned, so the replacement is
+ * always a deliberate choice. Statement, synced and calculated entries are separate rows and are never touched.
  */
 export async function recordBalance(
   prisma: PrismaClient,
   userId: string,
   accountId: string,
   input: BalanceInput,
-): Promise<ServiceResult<{ replaced: boolean }>> {
+  options: { replaceExisting?: boolean } = {},
+): Promise<ServiceResult<{ replaced: boolean }> | ExistingManualEntry> {
   return prisma.$transaction(async (tx) => {
     const account = await tx.financialAccount.findUnique({
       where: { id_userId: { id: accountId, userId } },
@@ -472,6 +482,11 @@ export async function recordBalance(
     }
     const asOfDate = toDatabaseDate(input.asOfDate);
     const key = { accountId, asOfDate, source: "MANUAL" as const };
+    const exists = (existingCents: number): ExistingManualEntry => ({
+      ok: false,
+      reason: "exists",
+      existingCents,
+    });
 
     if (input.storage === "snapshot") {
       const data = {
@@ -480,8 +495,11 @@ export async function recordBalance(
       };
       const existing = await tx.balanceSnapshot.findUnique({
         where: { accountId_asOfDate_source: key },
-        select: { id: true },
+        select: { balanceCents: true },
       });
+      if (existing && !options.replaceExisting) {
+        return exists(existing.balanceCents);
+      }
       await tx.balanceSnapshot.upsert({
         where: { accountId_asOfDate_source: key },
         create: { ...key, userId, ...data },
@@ -496,8 +514,11 @@ export async function recordBalance(
     };
     const existing = await tx.portfolioValuation.findUnique({
       where: { accountId_asOfDate_source: key },
-      select: { id: true },
+      select: { marketValueCents: true, cashCents: true },
     });
+    if (existing && !options.replaceExisting) {
+      return exists(valuationTotalCents(existing));
+    }
     await tx.portfolioValuation.upsert({
       where: { accountId_asOfDate_source: key },
       create: { ...key, userId, ...data },

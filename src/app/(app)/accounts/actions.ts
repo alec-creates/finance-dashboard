@@ -41,7 +41,14 @@ export type FormState<Field extends string> =
     };
 
 export type AccountFormState = FormState<AccountField>;
-export type BalanceFormState = FormState<BalanceField>;
+export type BalanceFormState =
+  | FormState<BalanceField>
+  | {
+      /** A manual entry exists for the date: show it and ask before replacing. */
+      status: "confirm-replace";
+      existingCents: number;
+      values: Record<string, string>;
+    };
 export type ActionState = FormState<never>;
 
 const FAILURE_MESSAGES: Record<AccountFailure, string> = {
@@ -156,7 +163,17 @@ export async function recordBalanceAction(
       values: submittedValues(formData),
     };
   }
-  const result = await recordBalance(prisma, user.id, accountId, parsed.data);
+  const result = await recordBalance(prisma, user.id, accountId, parsed.data, {
+    // Set only by the form's explicit "Replace" choice, and only for the date it was shown for.
+    replaceExisting: parsed.data.asOfDate === formData.get("replaceExisting"),
+  });
+  if (!result.ok && result.reason === "exists") {
+    return {
+      status: "confirm-replace",
+      existingCents: result.existingCents,
+      values: submittedValues(formData),
+    };
+  }
   if (!result.ok) {
     return {
       status: "error",
@@ -169,7 +186,7 @@ export async function recordBalanceAction(
   return {
     status: "saved",
     message: result.value.replaced
-      ? "Balance updated. It replaced your earlier entry for that date."
+      ? "Balance replaced. The earlier manual entry for that date was overwritten."
       : "Balance saved.",
   };
 }

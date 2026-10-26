@@ -58,12 +58,13 @@ async function record(
   accountId: string,
   type: AccountInput["type"],
   fields: Record<string, string>,
+  options: { replaceExisting?: boolean } = {},
 ) {
   const parsed = parseBalanceForm(type, fields, NOW);
   if (!parsed.ok) {
     throw new Error(`invalid balance: ${JSON.stringify(parsed.fieldErrors)}`);
   }
-  return recordBalance(prisma, userId, accountId, parsed.data);
+  return recordBalance(prisma, userId, accountId, parsed.data, options);
 }
 
 async function snapshotCount(accountId: string) {
@@ -195,21 +196,77 @@ describe("balances", () => {
     expect(detail?.historyTotal).toBe(3);
   });
 
-  it("replaces a manual entry for the same date instead of adding a second", async () => {
+  it("asks before replacing a manual entry for the same date, and replaces it only when told to", async () => {
     const checking = await create(alice.id);
-    const first = await record(alice.id, checking, "CHECKING", {
-      asOfDate: "2026-10-15",
-      amount: "100",
+    const entry = { asOfDate: "2026-10-15", amount: "100" };
+    expect(await record(alice.id, checking, "CHECKING", entry)).toEqual({
+      ok: true,
+      value: { replaced: false },
     });
-    const second = await record(alice.id, checking, "CHECKING", {
-      asOfDate: "2026-10-15",
-      amount: "120",
-    });
-    expect(first).toEqual({ ok: true, value: { replaced: false } });
-    expect(second).toEqual({ ok: true, value: { replaced: true } });
+
+    // Without the explicit choice nothing changes, and the existing amount comes back.
+    expect(
+      await record(alice.id, checking, "CHECKING", { ...entry, amount: "120" }),
+    ).toEqual({ ok: false, reason: "exists", existingCents: 10_000 });
+    let [account] = await listAccountsWithBalances(prisma, alice.id);
+    expect(account?.current).toMatchObject({ balanceCents: 10_000 });
+
+    expect(
+      await record(
+        alice.id,
+        checking,
+        "CHECKING",
+        { ...entry, amount: "120" },
+        { replaceExisting: true },
+      ),
+    ).toEqual({ ok: true, value: { replaced: true } });
     expect(await snapshotCount(checking)).toBe(1);
-    const [account] = await listAccountsWithBalances(prisma, alice.id);
+    [account] = await listAccountsWithBalances(prisma, alice.id);
     expect(account?.current).toMatchObject({ balanceCents: 12_000 });
+  });
+
+  it("never asks for a date that only has a statement entry, and keeps statement priority", async () => {
+    const checking = await create(alice.id);
+    await prisma.balanceSnapshot.create({
+      data: {
+        userId: alice.id,
+        accountId: checking,
+        asOfDate: toDatabaseDate(parseCalendarDate("2026-10-15")),
+        balanceCents: 9_000,
+        source: "STATEMENT",
+      },
+    });
+    expect(
+      await record(alice.id, checking, "CHECKING", {
+        asOfDate: "2026-10-15",
+        amount: "100",
+      }),
+    ).toEqual({ ok: true, value: { replaced: false } });
+    expect(await snapshotCount(checking)).toBe(2);
+    const [account] = await listAccountsWithBalances(prisma, alice.id);
+    expect(account?.current).toMatchObject({
+      balanceCents: 9_000,
+      source: "STATEMENT",
+    });
+  });
+
+  it("asks before replacing an investment value, reporting the existing total", async () => {
+    const roth = await create(alice.id, {
+      type: "INVESTMENT",
+      investmentType: "ROTH_IRA",
+      includeInSafeToSpend: false,
+      minimumBalanceCents: null,
+    });
+    const entry = { asOfDate: "2026-10-15", amount: "5,000", cash: "250" };
+    await record(alice.id, roth, "INVESTMENT", entry);
+    expect(
+      await record(alice.id, roth, "INVESTMENT", { ...entry, amount: "6,000" }),
+    ).toEqual({ ok: false, reason: "exists", existingCents: 500_000 });
+    expect(
+      await prisma.portfolioValuation.findFirstOrThrow({
+        where: { accountId: roth },
+      }),
+    ).toMatchObject({ marketValueCents: 475_000, cashCents: 25_000 });
   });
 
   it("keeps an investment account's cash inside its total, in valuations only", async () => {

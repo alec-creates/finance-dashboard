@@ -1,10 +1,13 @@
 "use client";
 
-import { useActionState, useSyncExternalStore } from "react";
+import { CircleAlertIcon } from "lucide-react";
+import { useActionState, useState, useSyncExternalStore } from "react";
 
 import type { BalanceFormState } from "@/app/(app)/accounts/actions";
 import { FormError } from "@/components/auth/auth-card";
 import { describedBy, Field } from "@/components/forms/field";
+import { useVisibleErrors } from "@/components/forms/use-visible-errors";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { balanceAmountLabel } from "@/lib/account-forms";
@@ -13,6 +16,9 @@ import {
   supportsSafeToSpend,
   type AccountType,
 } from "@/lib/accounts";
+import { formatCalendarDate, isCalendarDate } from "@/lib/dates";
+
+import { BalanceAmount } from "./balance-amount";
 
 function localToday(): string {
   const now = new Date();
@@ -27,12 +33,19 @@ function useLocalToday(): string {
   return useSyncExternalStore(noSubscription, localToday, () => "");
 }
 
-/** Records a balance (or an investment account's value) as of a date. */
+/**
+ * Records a balance (or an investment account's value) as of a date. Picking a date that already has a manual entry
+ * shows that entry and turns saving into an explicit replacement; the server asks the same way for dates the page
+ * does not know about.
+ */
 export function BalanceForm({
   type,
   action,
+  manualEntries,
 }: {
   type: AccountType;
+  /** Manual entries shown on the page: date (YYYY-MM-DD) -> stored amount. */
+  manualEntries: Readonly<Record<string, number>>;
   action: (
     state: BalanceFormState,
     formData: FormData,
@@ -42,8 +55,26 @@ export function BalanceForm({
     status: "idle",
   });
   const today = useLocalToday();
-  const errors = state.status === "error" ? state.fieldErrors : {};
-  const submitted = state.status === "error" ? state.values : null;
+  // Editing the total can settle a "cash exceeds total" error.
+  const { errors, onChange: clearStaleErrors } = useVisibleErrors(
+    state,
+    state.status === "error" ? state.fieldErrors : {},
+    { amount: ["cash"] },
+  );
+  const submitted =
+    state.status === "error" || state.status === "confirm-replace"
+      ? state.values
+      : null;
+
+  // The date currently in the field (it is uncontrolled; a new server response resets it).
+  const [picked, setPicked] = useState<{ result: unknown; date: string }>();
+  const date =
+    picked?.result === state ? picked.date : (submitted?.asOfDate ?? today);
+  const existingCents =
+    state.status === "confirm-replace" && state.values.asOfDate === date
+      ? state.existingCents
+      : manualEntries[date];
+  const replacing = existingCents !== undefined;
   const isInvestment = type === "INVESTMENT";
 
   const amountHint = isInvestment
@@ -53,7 +84,18 @@ export function BalanceForm({
       : "The current (ledger) balance. It can be negative if the account is overdrawn.";
 
   return (
-    <form action={formAction} className="space-y-5" noValidate>
+    <form
+      action={formAction}
+      onChange={(event) => {
+        clearStaleErrors(event);
+        const target = event.target as unknown as HTMLInputElement;
+        if (target.name === "asOfDate") {
+          setPicked({ result: state, date: target.value });
+        }
+      }}
+      className="space-y-5"
+      noValidate
+    >
       <div className="grid gap-5 sm:grid-cols-2">
         <Field name="asOfDate" label="As of" error={errors.asOfDate}>
           <Input
@@ -132,6 +174,25 @@ export function BalanceForm({
         ) : null}
       </div>
 
+      {replacing ? (
+        <Alert role="status">
+          <CircleAlertIcon aria-hidden />
+          <AlertDescription className="text-foreground">
+            <p>
+              You already entered{" "}
+              <BalanceAmount
+                type={type}
+                cents={existingCents}
+                className="font-medium"
+              />{" "}
+              for {isCalendarDate(date) ? formatCalendarDate(date) : date}.
+              Saving replaces that entry; the earlier value isn&apos;t kept.
+            </p>
+          </AlertDescription>
+          {/* The explicit choice the server requires, bound to the date it was shown for. */}
+          <input type="hidden" name="replaceExisting" value={date} />
+        </Alert>
+      ) : null}
       {state.status === "error" && state.formError ? (
         <FormError message={state.formError} />
       ) : null}
@@ -146,7 +207,7 @@ export function BalanceForm({
         disabled={pending}
         className="h-10 w-full sm:w-auto"
       >
-        {pending ? "Saving…" : "Save balance"}
+        {pending ? "Saving…" : replacing ? "Replace balance" : "Save balance"}
       </Button>
     </form>
   );

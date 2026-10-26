@@ -163,7 +163,9 @@ snapshots, so net worth has one code path.
 - The current balance is the entry with the latest `asOfDate`; on the same date STATEMENT beats PROVIDER beats MANUAL
   beats COMPUTED. An account with no entry has no balance (shown as missing, never as zero).
 - Forms ask for the amount **owed** on liabilities and store it negative; a negative amount owed is a credit balance.
-- A second MANUAL entry for the same date replaces the first. Only MANUAL entries can be removed in the app.
+- A second MANUAL entry for the same date replaces the first, but only after the owner confirms: the form shows the
+  existing value, and the server refuses to overwrite unless the confirmation names that date. Only MANUAL entries
+  can be removed in the app.
 - Once anything is recorded for an account it can only be archived, not deleted, and its type can only change between
   CHECKING, SAVINGS and CASH (an investment account's kind is fixed). Archived accounts keep their history and are
   read-only; current totals and Safe to Spend leave them out.

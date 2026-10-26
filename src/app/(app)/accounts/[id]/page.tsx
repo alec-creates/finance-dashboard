@@ -142,6 +142,11 @@ async function AccountView({
                 <BalanceForm
                   type={account.type}
                   action={recordBalanceAction.bind(null, account.id)}
+                  manualEntries={Object.fromEntries(
+                    account.history
+                      .filter((entry) => entry.source === "MANUAL")
+                      .map((entry) => [entry.asOfDate, entry.amountCents]),
+                  )}
                 />
               </CardContent>
             </Card>
