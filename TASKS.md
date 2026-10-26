@@ -71,7 +71,7 @@ dashboard, all responsive on phone and desktop at $0 recurring cost.
     tab bar below; theme script tested by executing it against a fake DOM; placeholders for Transactions, Budgets and
     Accounts; Settings with appearance and security. Checked in a browser at 375 px and 1280 px, light and dark,
     keyboard only (skip link, menus, Escape), sign-out from the account menu.
-- [ ] **6. Accounts**: create, edit and archive accounts of every type, with manual balance snapshots
+- [x] **6. Accounts**: create, edit and archive accounts of every type, with manual balance snapshots
   - Acceptance:
     - Account types: checking, savings, credit card, investment (with its type: taxable, Traditional IRA, Roth IRA,
       crypto, other), other asset, other liability.
@@ -83,6 +83,13 @@ dashboard, all responsive on phone and desktop at $0 recurring cost.
     - Liability balances follow the sign convention in `docs/data-model.md`.
     - The Overview lists real balances.
     - Unit and integration tests, including that another user's account id is rejected.
+  - Done (2026-10-26): accounts list grouped by kind (cash, credit cards, investments, other assets, loans) with
+    group totals that report missing balances instead of treating them as zero; add/edit forms with Zod validation;
+    detail page with current balance, balance updates, history (manual entries removable), archive/restore, and
+    delete only for accounts with no history. Investments use portfolio valuations (total = holdings + cash).
+    Liabilities are entered as amounts owed. Type changes are limited once history exists. 41 unit tests, 18
+    integration tests including cross-user reads, edits, archives, deletes and balance writes (verified to fail
+    when ownership scoping is removed). Checked in a browser at 375 px and 1280 px.
 - [ ] **7. Transactions and categories**: starter categories, a transaction list, manual entry with kind and splits
   - Acceptance:
     - A new user gets an editable starter set of two-level categories with an essential flag. Categories can be

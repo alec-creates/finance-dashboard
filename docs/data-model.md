@@ -155,6 +155,19 @@ model BalanceSnapshot {          // historical balances for cash/credit/manual a
 Manual assets and debts are ordinary `FinancialAccount`s (`OTHER_ASSET`, `LOAN`, `OTHER_LIABILITY`) with manual
 snapshots, so net worth has one code path.
 
+**Current balance** (`src/lib/accounts.ts`, `src/server/services/accounts.ts`):
+
+- Bank, card, loan and other accounts read `BalanceSnapshot`; investment accounts read `PortfolioValuation` (total =
+  `marketValueCents + cashCents`), never both. Forms ask for an investment account's total and the part of it that is
+  cash, so cash cannot be added on top of a total that already includes it.
+- The current balance is the entry with the latest `asOfDate`; on the same date STATEMENT beats PROVIDER beats MANUAL
+  beats COMPUTED. An account with no entry has no balance (shown as missing, never as zero).
+- Forms ask for the amount **owed** on liabilities and store it negative; a negative amount owed is a credit balance.
+- A second MANUAL entry for the same date replaces the first. Only MANUAL entries can be removed in the app.
+- Once anything is recorded for an account it can only be archived, not deleted, and its type can only change between
+  CHECKING, SAVINGS and CASH (an investment account's kind is fixed). Archived accounts keep their history and are
+  read-only; current totals and Safe to Spend leave them out.
+
 ## Cash transactions (bank and credit card accounts)
 
 ```prisma
