@@ -38,6 +38,17 @@ describe("proxy (optimistic session check)", () => {
     }
   });
 
+  it("serves the PWA manifest and icons without a session, matched exactly", () => {
+    for (const path of [
+      "/manifest.webmanifest",
+      "/icon.svg",
+      "/apple-icon.png",
+    ]) {
+      expect(proxy(request(path)).headers.get("x-middleware-next")).toBe("1");
+    }
+    expect(proxy(request("/manifest.webmanifest/x")).status).toBe(307);
+  });
+
   it("does not treat look-alike paths as public", () => {
     expect(proxy(request("/sign-in-anything")).status).toBe(307);
     expect(proxy(request("/api/authx")).status).toBe(401);

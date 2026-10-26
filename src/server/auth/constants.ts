@@ -13,5 +13,15 @@ export const MAX_PASSWORD_LENGTH = 128;
 /** Pages anyone can open; everything else requires a session. */
 export const PUBLIC_PATHS = ["/sign-in", "/two-factor", "/setup"] as const;
 
+/**
+ * Static app metadata that browsers fetch without cookies (the PWA manifest, icons). Matched exactly; they contain no
+ * user data.
+ */
+export const PUBLIC_FILES = [
+  "/manifest.webmanifest",
+  "/icon.svg",
+  "/apple-icon.png",
+] as const;
+
 export const SIGN_IN_PATH = "/sign-in";
 export const TWO_FACTOR_SETUP_PATH = "/security/two-factor";

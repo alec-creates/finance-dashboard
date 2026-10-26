@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import {
   AUTH_COOKIE_PREFIX,
+  PUBLIC_FILES,
   PUBLIC_PATHS,
   SIGN_IN_PATH,
 } from "@/server/auth/constants";
@@ -15,6 +16,7 @@ export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isPublic =
     pathname.startsWith("/api/auth/") ||
+    (PUBLIC_FILES as readonly string[]).includes(pathname) ||
     PUBLIC_PATHS.some(
       (path) => pathname === path || pathname.startsWith(`${path}/`),
     );
