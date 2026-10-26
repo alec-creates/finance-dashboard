@@ -90,6 +90,11 @@ dashboard, all responsive on phone and desktop at $0 recurring cost.
     Liabilities are entered as amounts owed. Type changes are limited once history exists. 41 unit tests, 18
     integration tests including cross-user reads, edits, archives, deletes and balance writes (verified to fail
     when ownership scoping is removed). Checked in a browser at 375 px and 1280 px.
+  - Review fixes: a field's validation error clears once it (or a field it depends on) is edited, while every submit
+    is still validated on the server; replacing a same-day manual balance shows the existing value and needs an
+    explicit confirmation bound to that date, enforced by the server (4 unit and 2 integration tests added).
+  - Known minor follow-ups: account history shows the latest 60 entries without pagination; Server Actions have no
+    tests of their own (ownership is tested in the service layer they call).
 - [ ] **7. Transactions and categories**: starter categories, a transaction list, manual entry with kind and splits
   - Acceptance:
     - A new user gets an editable starter set of two-level categories with an essential flag. Categories can be
