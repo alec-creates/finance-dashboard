@@ -1,11 +1,11 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import QRCode from "qrcode";
 import { useState, type FormEvent } from "react";
 
 import { authClient } from "@/lib/auth-client";
 import { describeAuthError } from "@/lib/auth-messages";
+import { navigateWithFullReload } from "@/lib/navigation";
 
 import { buttonClass, FormError, inputClass, labelClass } from "./auth-card";
 
@@ -20,7 +20,6 @@ interface Enrollment {
  * code to prove the app is set up. Secrets stay in this component's memory and are never sent anywhere else.
  */
 export function TwoFactorSetup() {
-  const router = useRouter();
   const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
   const [savedCodes, setSavedCodes] = useState(false);
   const [error, setError] = useState("");
@@ -69,8 +68,7 @@ export function TwoFactorSetup() {
       return;
     }
     setEnrollment(null); // drop secrets from memory
-    router.replace("/");
-    router.refresh();
+    navigateWithFullReload("/");
   }
 
   function downloadBackupCodes(codes: string[]) {

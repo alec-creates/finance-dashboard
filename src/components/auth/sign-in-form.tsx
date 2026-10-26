@@ -1,15 +1,14 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
 import { authClient } from "@/lib/auth-client";
 import { describeAuthError } from "@/lib/auth-messages";
+import { navigateWithFullReload } from "@/lib/navigation";
 
 import { buttonClass, FormError, inputClass, labelClass } from "./auth-card";
 
 export function SignInForm() {
-  const router = useRouter();
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
 
@@ -27,12 +26,12 @@ export function SignInForm() {
       setError(describeAuthError(authError, "signIn"));
       return;
     }
+    // Full reloads drop the typed password from memory instead of keeping this form alive but hidden.
     if (data && "twoFactorRedirect" in data && data.twoFactorRedirect) {
-      router.push("/two-factor"); // password accepted; a code is still required
+      navigateWithFullReload("/two-factor"); // password accepted; a code is still required
       return;
     }
-    router.replace("/");
-    router.refresh();
+    navigateWithFullReload("/");
   }
 
   return (

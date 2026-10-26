@@ -1,10 +1,10 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
 import { authClient } from "@/lib/auth-client";
 import { describeAuthError } from "@/lib/auth-messages";
+import { navigateWithFullReload } from "@/lib/navigation";
 import {
   MIN_PASSWORD_LENGTH,
   TWO_FACTOR_SETUP_PATH,
@@ -14,7 +14,6 @@ import { buttonClass, FormError, inputClass, labelClass } from "./auth-card";
 
 /** One-time creation of the owner account. The server accepts only the configured owner email. */
 export function SetupForm() {
-  const router = useRouter();
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
 
@@ -38,8 +37,7 @@ export function SetupForm() {
       setError(describeAuthError(authError, "signUp"));
       return;
     }
-    router.replace(TWO_FACTOR_SETUP_PATH);
-    router.refresh();
+    navigateWithFullReload(TWO_FACTOR_SETUP_PATH);
   }
 
   return (

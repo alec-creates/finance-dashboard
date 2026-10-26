@@ -1,16 +1,15 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
 import { authClient } from "@/lib/auth-client";
 import { describeAuthError } from "@/lib/auth-messages";
+import { navigateWithFullReload } from "@/lib/navigation";
 
 import { buttonClass, FormError, inputClass, labelClass } from "./auth-card";
 
 /** Second step of sign-in: a code from the authenticator app, or a one-time backup code. */
 export function TwoFactorForm() {
-  const router = useRouter();
   const [useBackupCode, setUseBackupCode] = useState(false);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
@@ -30,8 +29,7 @@ export function TwoFactorForm() {
       setError(describeAuthError(authError, "twoFactor"));
       return;
     }
-    router.replace("/");
-    router.refresh();
+    navigateWithFullReload("/");
   }
 
   return (
