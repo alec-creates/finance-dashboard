@@ -1,19 +1,25 @@
+import { LayoutDashboardIcon } from "lucide-react";
 import { Suspense } from "react";
 
+import { ComingSoon } from "@/components/app-shell/coming-soon";
+import { PageHeader } from "@/components/app-shell/page-header";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { requireUser } from "@/server/auth/session";
 import { getPrisma } from "@/server/db/client";
 import { listAccounts } from "@/server/services/accounts";
 
 export default function HomePage() {
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-semibold tracking-tight">Overview</h1>
-      <Suspense
-        fallback={<p className="text-sm text-zinc-500">Loading accounts…</p>}
-      >
+    <>
+      <PageHeader
+        title="Overview"
+        description="Where your money stands this month."
+      />
+      <Suspense fallback={<Skeleton className="h-64 w-full max-w-2xl" />}>
         <AccountList />
       </Suspense>
-    </div>
+    </>
   );
 }
 
@@ -23,24 +29,39 @@ async function AccountList() {
   const accounts = await listAccounts(getPrisma(), user.id);
   if (accounts.length === 0) {
     return (
-      <p className="text-sm text-zinc-600 dark:text-zinc-400">
-        No accounts yet. Account management arrives in Phase 1 Task 6.
-      </p>
+      <ComingSoon
+        icon={LayoutDashboardIcon}
+        title="Your overview will appear here"
+        description="Once accounts and transactions exist, this page summarizes them."
+        roadmap="Task 12"
+        planned={[
+          "Cash and credit card balances",
+          "This month's income and spending",
+          "Budget progress and transactions waiting for review",
+        ]}
+      />
     );
   }
   return (
-    <ul className="divide-y divide-zinc-200 rounded-lg border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
-      {accounts.map((account) => (
-        <li
-          key={account.id}
-          className="flex items-center justify-between px-4 py-3 text-sm"
-        >
-          <span className="font-medium">{account.name}</span>
-          <span className="text-zinc-500">
-            {account.institutionName ?? account.type}
-          </span>
-        </li>
-      ))}
-    </ul>
+    <Card className="max-w-2xl">
+      <CardHeader>
+        <CardTitle>Accounts</CardTitle>
+      </CardHeader>
+      <CardContent className="px-0">
+        <ul className="divide-y border-t">
+          {accounts.map((account) => (
+            <li
+              key={account.id}
+              className="flex items-center justify-between gap-4 px-4 py-3 text-sm"
+            >
+              <span className="truncate font-medium">{account.name}</span>
+              <span className="shrink-0 text-muted-foreground">
+                {account.institutionName ?? account.type}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </CardContent>
+    </Card>
   );
 }

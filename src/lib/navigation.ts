@@ -9,3 +9,14 @@
 export function navigateWithFullReload(path: `/${string}`): void {
   window.location.replace(path);
 }
+
+/**
+ * Whether a navigation item for `href` is the current section. "/" matches only itself; other items also match their
+ * sub-pages ("/settings" for "/settings/security"), never a look-alike ("/settings" for "/settings-old").
+ */
+export function isActivePath(pathname: string, href: `/${string}`): boolean {
+  if (href === "/") {
+    return pathname === "/";
+  }
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
