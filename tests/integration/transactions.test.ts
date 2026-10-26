@@ -17,6 +17,7 @@ import {
 import {
   createTransaction,
   deleteTransaction,
+  getSavedTimeZone,
   getTransaction,
   listTransactions,
   updateTransaction,
@@ -624,5 +625,16 @@ describe("another user's data behaves as if it does not exist", () => {
         isEssential: false,
       }),
     ).toEqual({ ok: false, reason: "invalid-parent" });
+  });
+});
+
+describe("saved time zone", () => {
+  it("is null until set, so the browser's zone is used, and the owner's own when set", async () => {
+    expect(await getSavedTimeZone(prisma, alice.id)).toBeNull();
+    await prisma.userSettings.create({
+      data: { userId: bob.id, timeZone: "Asia/Tokyo" },
+    });
+    expect(await getSavedTimeZone(prisma, bob.id)).toBe("Asia/Tokyo");
+    expect(await getSavedTimeZone(prisma, alice.id)).toBeNull();
   });
 });

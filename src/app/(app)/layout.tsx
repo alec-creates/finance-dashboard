@@ -2,6 +2,7 @@ import { Suspense, type ReactNode } from "react";
 
 import { Brand } from "@/components/app-shell/brand";
 import { MobileTabBar, SidebarNav } from "@/components/app-shell/main-nav";
+import { TimeZoneReporter } from "@/components/app-shell/time-zone-reporter";
 import { UserMenu } from "@/components/app-shell/user-menu";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -57,6 +58,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       </div>
 
       <MobileTabBar />
+      <TimeZoneReporter />
     </div>
   );
 }

@@ -19,6 +19,7 @@ const REQUIRED_SUITES = [
   "src/lib/account-forms.test.ts",
   "src/lib/transactions.test.ts",
   "src/lib/transaction-forms.test.ts",
+  "src/lib/time-zone.test.ts",
   "src/server/db/environment.test.ts",
   "src/server/env.test.ts",
   "src/server/synthetic/generate.test.ts",

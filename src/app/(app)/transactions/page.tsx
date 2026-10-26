@@ -6,6 +6,7 @@ import {
   TagsIcon,
 } from "lucide-react";
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import Link from "next/link";
 import { Suspense } from "react";
 
@@ -26,11 +27,14 @@ import {
   formatCalendarDate,
   parseCalendarDate,
   parseYearMonth,
-  todayInTimeZone,
-  yearMonthOf,
   type YearMonth,
 } from "@/lib/dates";
 import { formatUsd } from "@/lib/money";
+import {
+  currentMonth,
+  resolveTimeZone,
+  TIME_ZONE_COOKIE,
+} from "@/lib/time-zone";
 import {
   countsAsIncome,
   countsAsSpending,
@@ -41,7 +45,7 @@ import { requireUser } from "@/server/auth/session";
 import { getPrisma } from "@/server/db/client";
 import { listAccountsWithBalances } from "@/server/services/accounts";
 import {
-  getUserTimeZone,
+  getSavedTimeZone,
   listTransactions,
   type TransactionRow,
 } from "@/server/services/transactions";
@@ -85,11 +89,16 @@ async function TransactionsView({
   const params = await searchParams;
   const user = await requireUser();
   const prisma = getPrisma();
-  const [accounts, timeZone] = await Promise.all([
+  const [accounts, savedTimeZone, cookieStore] = await Promise.all([
     listAccountsWithBalances(prisma, user.id),
-    getUserTimeZone(prisma, user.id),
+    getSavedTimeZone(prisma, user.id),
+    cookies(),
   ]);
-  const thisMonth = yearMonthOf(todayInTimeZone(timeZone));
+  // The owner's local month (saved zone, else the zone their browser reports), computed here so the server render
+  // and hydration agree. Transaction dates themselves are calendar dates and are never shifted.
+  const thisMonth = currentMonth(
+    resolveTimeZone(savedTimeZone, cookieStore.get(TIME_ZONE_COOKIE)?.value),
+  );
   const month = readMonth(params.month, thisMonth);
   // An account id that isn't the owner's is ignored rather than trusted.
   const accountId =

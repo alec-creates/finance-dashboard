@@ -113,8 +113,10 @@ dashboard, all responsive on phone and desktop at $0 recurring cost.
     rows are read-only. 29 unit and 18 integration tests (card purchase vs payment, refunds, transfers, splits,
     month boundaries, editing, archived categories, untouched balance snapshots, cross-user accounts, categories and
     transactions; verified to fail when category scoping is removed). Checked in a browser at 375 px and 1280 px.
-  - Follow-ups: transfer and card-payment legs are not linked (Task 10 pairing); "this month" uses UTC until a time
-    zone setting exists; no search or pagination within a month (Phase 2).
+  - Review fix: the default month is the owner's local month. The browser reports its IANA time zone in a cookie and
+    the server renders with it (a saved setting would win; invalid values fall back to UTC); stored dates are unchanged.
+  - Follow-ups: transfer and card-payment legs are not linked (Task 10 pairing); a time zone setting in Settings is
+    still to come (the browser's zone is used until then); no search or pagination within a month (Phase 2).
 - [ ] **8. Production deploy** (milestone A: technical deployment): Vercel Hobby + Neon production project, PWA basics,
       testing state
   - Acceptance:

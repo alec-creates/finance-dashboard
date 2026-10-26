@@ -406,14 +406,14 @@ export async function deleteTransaction(
   });
 }
 
-/** The owner's time zone for "this month", or UTC until one is configured. */
-export async function getUserTimeZone(
+/** The owner's saved time zone, or null when none is configured (the browser's zone is used then). */
+export async function getSavedTimeZone(
   prisma: PrismaClient,
   userId: string,
-): Promise<string> {
+): Promise<string | null> {
   const settings = await prisma.userSettings.findUnique({
     where: { userId },
     select: { timeZone: true },
   });
-  return settings?.timeZone ?? "UTC";
+  return settings?.timeZone ?? null;
 }
