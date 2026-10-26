@@ -117,6 +117,9 @@ disabled; do not build multi-user administration or subscriptions.
 - Secrets only in `.env.local` (development), `.env.test.local` (tests) and Vercel project settings (production).
   `.env.example` lists names with empty values. Never read, print or log the contents of these files; use
   `npm run db:check-env`, which reports pass/fail only.
+- Production releases (ADR-0011, `docs/deployment.md`): only the manually started, approval-protected
+  `Release production` workflow touches the production database, only with `migrate deploy`, after an identity check.
+  App builds never migrate; Vercel never deploys `main` on its own. Never add production credentials anywhere else.
 - Development, test and production use **separate Neon projects** (ADR-0008). Database tests and reset helpers must
   refuse to run unless `DATABASE_ENV=test` and the host differs from development. Real data lives only in production.
 - Never commit real CSVs, statements, screenshots of real data, or database dumps (see `.gitignore`).
@@ -139,23 +142,25 @@ disabled; do not build multi-user administration or subscriptions.
 
 ## Commands
 
-| Command                       | Purpose                                                                 |
-| ----------------------------- | ----------------------------------------------------------------------- |
-| `npm run dev`                 | Start the dev server on http://localhost:3000                           |
-| `npm run check`               | Format check, lint, typecheck, unit tests (CI)                          |
-| `npm run build`               | Production build                                                        |
-| `npm test`                    | Run Vitest once (`npm run test:watch` to iterate)                       |
-| `npm run format`              | Apply Prettier                                                          |
-| `npm run test:coverage`       | Coverage report in `coverage/`                                          |
-| `npm run db:check-env`        | Validate local database env files (no values shown)                     |
-| `npm run db:check-connection` | Same, plus a read-only sign-in to dev and test (no values shown)        |
-| `npm run auth:setup-env`      | Add missing auth settings (random secrets) to both env files, unprinted |
-| `npm run db:migrate`          | Create/apply migrations on the **development** database (`-- --name x`) |
-| `npm run db:migrate:create`   | Create a migration without applying it (to add hand-written SQL)        |
-| `npm run db:migrate:test`     | Apply migrations to the test database (`migrate deploy` only)           |
-| `npm run db:status`           | Migration status of the development database                            |
-| `npm run db:seed`             | Replace the synthetic demo user's data in development                   |
-| `npm run test:integration`    | Database tests against the test database (not in CI: no credentials)    |
+| Command                       | Purpose                                                                   |
+| ----------------------------- | ------------------------------------------------------------------------- |
+| `npm run dev`                 | Start the dev server on http://localhost:3000                             |
+| `npm run check`               | Format check, lint, typecheck, unit tests (CI)                            |
+| `npm run build`               | Production build                                                          |
+| `npm test`                    | Run Vitest once (`npm run test:watch` to iterate)                         |
+| `npm run format`              | Apply Prettier                                                            |
+| `npm run test:coverage`       | Coverage report in `coverage/`                                            |
+| `npm run db:check-env`        | Validate local database env files (no values shown)                       |
+| `npm run db:check-connection` | Same, plus a read-only sign-in to dev and test (no values shown)          |
+| `npm run auth:setup-env`      | Add missing auth settings (random secrets) to both env files, unprinted   |
+| `npm run db:migrate`          | Create/apply migrations on the **development** database (`-- --name x`)   |
+| `npm run db:migrate:create`   | Create a migration without applying it (to add hand-written SQL)          |
+| `npm run db:migrate:test`     | Apply migrations to the test database (`migrate deploy` only)             |
+| `npm run db:status`           | Migration status of the development database                              |
+| `npm run db:seed`             | Replace the synthetic demo user's data in development                     |
+| `npm run test:integration`    | Database tests against the test database (not in CI: no credentials)      |
+| `npm run test:e2e`            | Build, then Playwright smoke tests against the test database (local only) |
+| `npm run db:fingerprint`      | Fingerprint of a connection string for the GitHub production environment  |
 
 ## Development workflow
 
