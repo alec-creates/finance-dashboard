@@ -2,10 +2,26 @@
 
 Roadmap and progress. One task at a time; the app stays working after each. Legend: `[x]` done, `[ ]` planned.
 
-## Phase 1 - Foundation
+## Milestones
 
-Goal: authenticated, responsive app with the full schema, synthetic data, accounts of every type, manual transactions
-and a polished default dashboard built from reusable widgets, deployed with synthetic data.
+The roadmap passes three separate gates. Reaching one does not imply the next.
+
+| Milestone                            | Reached after                     | Means                                                                                                                                                                |
+| ------------------------------------ | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A. Technical deployment**          | Task 8                            | Production runs on Vercel + Neon over HTTPS. It is in a **testing state**: a visible banner, invented test data only, **no real financial data**.                    |
+| **B. Ready for real financial data** | Task 9 + the gate checklist below | Authentication, authorization, backup and recovery, and the CSV import workflow are validated on production, and the owner signs off. Real data may now be imported. |
+| **C. Usable MVP**                    | Task 12                           | The daily loop works with real data: import bank and card CSVs, review and categorize, track budgets, see the overview on phone and desktop.                         |
+
+Roadmap revised on 2026-10-26 to reach a usable MVP sooner. Old Tasks 7 (categories) and 8 (manual transactions) are now
+Task 7. Old Task 9 (dashboard) is now Task 12. Old Task 10 is split into Task 8 (production deploy) and the Phase 7
+public demo. A minimal CSV import with backup and recovery (Task 9), the review queue (Task 10) and basic budgets
+(Task 11) moved up from Phases 2, 3 and 7. Their remaining features stay in those phases.
+
+## Phase 1 - Foundation and MVP
+
+Goal: a production deployment that handles real financial data safely, and a usable MVP. That means accounts,
+transactions and categories, CSV import with tested recovery, a review queue, monthly budgets and an overview
+dashboard, all responsive on phone and desktop at $0 recurring cost.
 
 - [x] **1. Project setup and tooling**: Next.js 16 + TS strict, Tailwind, ESLint + Prettier, Vitest, CI (checks +
       secret scan), `.gitignore` for secrets and financial files, CLAUDE.md, TASKS.md, README, ADRs, data model and
@@ -35,32 +51,153 @@ and a polished default dashboard built from reusable widgets, deployed with synt
       server-side `requireUser()` / `requireApiUser()`; `/setup`, `/sign-in`, `/two-factor`, `/security/two-factor`,
       `/settings/security`; protected `GET /api/accounts`; unit, proxy and integration tests (owner-only sign-up,
       sessions, logout, expiry, 2FA, rate limits, lockout, API authorization)
-- [ ] **5. App shell**: shadcn/ui, mobile bottom tabs / desktop sidebar, light/dark, PWA manifest and icons
-- [ ] **6. Accounts**: create/edit/archive accounts of every type (checking, savings, credit card, investment with
-      type, other assets/liabilities), optional minimum balance, manual balance snapshots, "last updated"
-- [ ] **7. Categories**: two-level categories, essential flag, editable starter set
-- [ ] **8. Manual transactions**: create/edit with kind and splits; split-sum invariant enforced and tested
-- [ ] **9. Basic dashboard**: widget registry + responsive grid renderer + code-defined default layouts for mobile and
-      desktop (ADR-0005); first widgets: cash balances, card balances, income and spending this month, spending by
-      category, recent transactions
-- [ ] **10. E2E and deploy**: Playwright critical path (sign in -> add transaction -> see it on dashboard); deploy to
-      Vercel Hobby with synthetic data
+- [ ] **5. App shell (trimmed)**: shadcn/ui, responsive navigation, light/dark mode, consistent auth pages,
+      placeholder pages
+  - Acceptance:
+    - shadcn/ui is set up for Tailwind 4, and only the components in use are added.
+    - Navigation covers Overview, Transactions, Budgets, Accounts and Settings: a sidebar on desktop, a bottom tab bar
+      on phones. The current page is marked visually and with `aria-current`.
+    - Theme follows the system by default. A manual toggle (light / dark / system) is remembered, with no flash of the
+      wrong theme on load.
+    - Sign-in, two-factor, setup and 2FA setup pages use the same components and theme as the app.
+    - Each unfinished section has a placeholder page that requires a signed-in user with 2FA (`requireUser()` inside
+      `<Suspense>`).
+    - Keyboard: a skip link to the main content, every control reachable with Tab, visible focus, menus closable with
+      Escape.
+    - No horizontal scrolling at 375 px wide; works at desktop widths.
+    - `npm run check` and `npm run build` pass.
+  - Deferred: the PWA manifest and icons move to Task 8 (installing needs HTTPS); PWA polish stays in Phase 7.
+- [ ] **6. Accounts**: create, edit and archive accounts of every type, with manual balance snapshots
+  - Acceptance:
+    - Account types: checking, savings, credit card, investment (with its type: taxable, Traditional IRA, Roth IRA,
+      crypto, other), other asset, other liability.
+    - Inputs are validated with Zod; amounts are parsed to cents through `money.ts`; services check ownership and take
+      `userId` only from the session.
+    - Optional minimum balance. Manual balance snapshots carry an as-of date. The list shows the latest balance and when
+      it was last updated.
+    - Archiving hides an account but keeps its history.
+    - Liability balances follow the sign convention in `docs/data-model.md`.
+    - The Overview lists real balances.
+    - Unit and integration tests, including that another user's account id is rejected.
+- [ ] **7. Transactions and categories**: starter categories, a transaction list, manual entry with kind and splits
+  - Acceptance:
+    - A new user gets an editable starter set of two-level categories with an essential flag. Categories can be
+      added, renamed and archived.
+    - The transaction list can be filtered by month and account and shows kind, category and amount. Monthly income
+      and spending totals are computed from `kind`, never from category.
+    - Manual create and edit with a kind and one or more splits. The splits must sum exactly to the amount, enforced
+      in the form, the service and the database.
+    - Tests cover refunds, transfers and card payments (excluded from income and spending), multi-split rounding and
+      ownership.
+- [ ] **8. Production deploy** (milestone A: technical deployment): Vercel Hobby + Neon production project, PWA basics,
+      testing state
+  - Acceptance:
+    - A `finance-dashboard-prod` Neon project exists, with credentials only in Vercel Production environment
+      variables. Preview deployments get no production credentials.
+    - Migrations reach production only through the guarded wrapper, and only with `migrate deploy`.
+    - `BETTER_AUTH_URL` is the production URL. The owner account and 2FA are created on production.
+    - Checked on the production URL:
+      - the session cookie is `__Secure-` and `Secure`;
+      - a POST from a foreign origin is rejected;
+      - signed-out pages redirect and APIs return 401;
+      - security headers are present;
+      - rate-limit rows are keyed by the real client IP.
+    - The PWA manifest and icons make the app installable on a phone.
+    - A Playwright smoke test (sign in -> 2FA -> overview -> every navigation section -> sign out) runs against the
+      test database. A signed-out visit to every section redirects to sign-in.
+    - **Testing state:** production shows a persistent "Testing - do not enter real financial data" banner until gate B
+      is signed off. Only invented test data may be entered.
+- [ ] **9. CSV import and backup/recovery**: a minimal import pipeline plus a documented, tested recovery procedure
+  - CSV import acceptance:
+    - Upload (size-limited, parsed on the server) -> column mapping -> preview with per-row errors -> confirm -> report
+      (imported / duplicates skipped / errors).
+    - Mapping covers date (selectable format), description, a single amount or separate debit and credit columns,
+      optional external id and balance. The sign convention is per account.
+    - Saved import profiles, including a generic one. Profiles for the owner's institutions are built locally from
+      header rows and never committed.
+    - Raw rows are stored with the import batch as immutable history.
+    - Amounts go through `money.ts`, dates through `dates.ts`.
+    - Duplicate detection uses the external id when present, otherwise a fingerprint (account, date, amount, normalized
+      description, occurrence). Re-importing the same file imports nothing.
+    - An entire import batch can be undone.
+    - Imported transactions start unreviewed, with a provisional kind from the amount's sign.
+    - Parser unit tests use synthetic fixtures (quoted commas, BOM, CRLF, debit/credit columns, parenthesized
+      negatives, thousands separators). Integration tests cover import -> duplicate re-import -> undo.
+  - Backup and recovery acceptance:
+    - The owner can download a full export of their data as versioned JSON (schema version, export time, row counts,
+      raw import rows).
+    - `docs/backup-and-restore.md` documents the full backup: `pg_dump` (free client tools) from the owner's machine,
+      stored outside the repository in an encrypted location. It also documents restore with `pg_restore` into a
+      separate, empty, non-production database, and a backup cadence (after each import session, at least weekly).
+    - The restore drill is scripted and tested: a dump of the development (synthetic) database is restored into the test
+      database, and row counts and per-account totals match. The script refuses production as a restore target.
+    - Limitations are documented. If JSON restore is not implemented, the JSON export is for portability and inspection
+      only, and recovery uses the database dump. Neon Free keeps only 6 hours of restore history. Backups contain real
+      data once gate B is passed.
+- [ ] **Gate B: ready for real financial data** (milestone B). All on production, before any real data is entered:
+  - [ ] Authentication validated: owner-only sign-up, password + mandatory 2FA, lockout, rate limits, sign-out
+        everywhere, `__Secure-` cookies, foreign origins rejected.
+  - [ ] Authorization validated: every page and API route requires a session with 2FA (Playwright route sweep), and
+        integration tests show no cross-user access.
+  - [ ] Backup and recovery validated: a production backup is restored into a non-production database and verified,
+        following the documented procedure.
+  - [ ] CSV import validated on production with synthetic files: preview, mapping, duplicate re-import, undo.
+  - [ ] Invented test data removed from production; testing banner turned off.
+  - [ ] Owner sign-off recorded here with the date.
+- [ ] **10. Review queue and categorization rules**: mobile-first review, rules, merchant memory, simple pairing
+  - Acceptance:
+    - The Needs Review queue lets the owner confirm, change category or kind, split or exclude. "Apply to future"
+      creates a rule.
+    - Merchant memory suggests the last confirmed category for a normalized merchant.
+    - Rules match description text, account and amount sign; they set category and kind and have priorities.
+    - Rules apply only to unreviewed transactions, unless the owner re-applies them after a preview (financial rule 6).
+    - Pairing suggestions: equal and opposite amounts between the owner's accounts within a few days. Confirming marks
+      both sides `TRANSFER` or `CREDIT_CARD_PAYMENT`.
+    - Tests show that confirmed transfers and card payments drop out of income and spending totals.
+- [ ] **11. Budgets (basic)**: monthly budgets per category with progress
+  - Acceptance:
+    - Budget amount per category per month; copy the previous month forward.
+    - Progress shows spent vs budget per category: expense splits minus refund splits in that month, transfers and card
+      payments excluded. Colors are green / yellow / red, with editable default thresholds.
+    - Unbudgeted spending and a month selector.
+    - Tests cover refunds, split transactions across categories, month boundaries in the user's time zone, and
+      excluded kinds.
+- [ ] **12. Overview dashboard and E2E** (milestone C: usable MVP)
+  - Acceptance:
+    - The widget registry and a responsive grid render one code-defined default layout (ADR-0005).
+    - Widgets: cash balances, credit card balances, this month's income and spending (by kind), budget progress,
+      needs-review count, recent transactions.
+    - Every widget has an empty state and shows its as-of date.
+    - Playwright critical path: sign in -> import a synthetic CSV -> review a transaction -> see it in budgets and on
+      the overview.
+    - Works at 375 px wide and at desktop widths.
+  - Milestone C is reached when one month of real bank and card data has been imported, reviewed and budgeted, and
+    each account's month-end balance matches its statement.
 
 ## Phase 2 - Imports, categorization, review
 
-- [ ] CSV import pipeline: upload -> column mapping -> preview -> confirm -> report; saved import profiles
+Minimal versions of the CSV pipeline, duplicate detection, rules, merchant memory, review queue and pairing ship in
+Tasks 9-10. The items below are the remaining scope.
+
+- [ ] CSV import pipeline: upload -> column mapping -> preview -> confirm -> report; saved import profiles (minimal in
+      Task 9; remaining: QFX/OFX import if an institution offers no CSV, import history view)
 - [ ] Import profiles for the owner's bank and credit card (built from real header rows, never committed), plus a
-      generic profile
-- [ ] Duplicate detection (externalId, fingerprint, near-match review) and import undo
-- [ ] Merchant normalization, categorization rules with priorities, merchant memory
-- [ ] Needs Review queue (mobile-first): confirm, change, split, exclude, "apply to future"
-- [ ] Transfer and card-payment pairing suggestions
+      generic profile (Task 9)
+- [ ] Duplicate detection (externalId, fingerprint, near-match review) and import undo (externalId, fingerprint and
+      undo in Task 9; remaining: near-match review)
+- [ ] Merchant normalization, categorization rules with priorities, merchant memory (rules and memory in Task 10;
+      remaining: merchant normalization and editing)
+- [ ] Needs Review queue (mobile-first): confirm, change, split, exclude, "apply to future" (Task 10)
+- [ ] Transfer and card-payment pairing suggestions (simple version in Task 10; remaining: better matching, unpairing)
 - [ ] Transaction search and filters, CSV export
+- [ ] JSON restore from the Task 9 export, if not implemented there
 
 ## Phase 3 - Budgets, income, recurring
 
-- [ ] Monthly budgets per category with per-month amounts, copy forward, optional rollover
-- [ ] Budget progress (green/yellow/red), previous-month comparisons, in-app alerts
+- [ ] Monthly budgets per category with per-month amounts, copy forward, optional rollover (basic budgets in Task 11;
+      remaining: rollover)
+- [ ] Budget progress (green/yellow/red), previous-month comparisons, in-app alerts (progress in Task 11; remaining:
+      comparisons, alerts)
 - [ ] Income sources with configurable pay schedules; paycheck detection; next payday projection
 - [ ] Income analytics: this/last month, 3/6-month averages, average paycheck, high/low, trend; incomplete months
       excluded
@@ -107,10 +244,12 @@ and a polished default dashboard built from reusable widgets, deployed with synt
 
 - [ ] Dashboard customization (ADR-0005): add, remove, reorder, resize presets, widget settings, separate mobile and
       desktop layouts saved in the database, restore default
-- [ ] PWA polish, offline-friendly shell, mobile performance
+- [ ] PWA polish, offline-friendly shell, mobile performance (manifest and icons in Task 8)
 - [ ] Wider E2E coverage, accessibility pass
-- [ ] Data export (JSON/CSV) and delete-imported-data tools; documented backup script
-- [ ] Public demo deployment with synthetic data; screenshots
+- [ ] Data export (JSON/CSV) and delete-imported-data tools; documented backup script (JSON export and backup/restore
+      in Task 9; remaining: CSV export, delete-imported-data tools)
+- [ ] Public demo deployment with synthetic data; screenshots (a separate Vercel project and Neon database, never
+      production; split from old Task 10)
 - [ ] README: architecture, data model, testing strategy, calculation methodology
 
 ## Open questions

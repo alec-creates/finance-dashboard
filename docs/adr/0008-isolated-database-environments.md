@@ -15,7 +15,7 @@ let one environment reach another. The Neon Free plan allows 100 projects, each 
 - Three separate Neon projects, each with its own credentials:
   - `finance-dashboard-dev`: local development, synthetic data only.
   - `finance-dashboard-test`: automated tests; may be wiped at any time.
-  - `finance-dashboard-prod`: real data, created when deploying (Phase 1 Task 10), configured only in Vercel.
+  - `finance-dashboard-prod`: real data, created when deploying (Phase 1 Task 8), configured only in Vercel.
 - Local configuration lives in gitignored files: `.env.local` (development) and `.env.test.local` (test). Next.js
   loads `.env.test.local` and skips `.env.local` when `NODE_ENV=test`, and test tooling uses the same loader.
 - Each file sets `DATABASE_URL` (pooled, runtime), `DIRECT_URL` (direct, Prisma migrations) and `DATABASE_ENV`
@@ -32,4 +32,4 @@ let one environment reach another. The Neon Free plan allows 100 projects, each 
 - A mistake in one file cannot reach another environment's data: the credentials are different.
 - Two (later three) free projects to manage in the Neon Console.
 - Neon Free keeps only 6 hours of restore history, so production backups rely on the app's export and a documented
-  `pg_dump` (Phase 7).
+  `pg_dump` with a tested restore drill (Phase 1 Task 9, required before real data: gate B in TASKS.md).

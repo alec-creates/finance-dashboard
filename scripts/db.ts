@@ -7,7 +7,7 @@
  * - "development" requires DATABASE_ENV=development and a database different from the test one.
  * - "test" requires DATABASE_ENV=test and a database different from the development one; only non-destructive
  *   commands are allowed (tests reset data themselves, after the same checks).
- * - "production" is refused until deployment is set up (Phase 1 Task 10).
+ * - "production" is refused until deployment is set up (Phase 1 Task 8).
  * Prisma's output is filtered so connection strings, hosts, users and passwords are never printed.
  */
 import { spawn } from "node:child_process";
