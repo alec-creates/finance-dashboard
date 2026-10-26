@@ -14,14 +14,14 @@ export function testAuthEnv() {
 /** A Better Auth instance for the test database. Breach checks are off so tests stay offline. */
 export function createTestAuth(
   prisma: PrismaClient,
-  ownerEmail = testAuthEnv().OWNER_EMAIL,
+  options: { ownerEmail?: string; baseURL?: string } = {},
 ): Auth {
   const env = testAuthEnv();
   return createAuth({
     prisma,
     secret: env.BETTER_AUTH_SECRET,
-    baseURL: env.BETTER_AUTH_URL,
-    ownerEmail,
+    baseURL: options.baseURL ?? env.BETTER_AUTH_URL,
+    ownerEmail: options.ownerEmail ?? env.OWNER_EMAIL,
     checkBreachedPasswords: false,
   });
 }
@@ -64,6 +64,8 @@ export interface AuthResponse {
   status: number;
   json: Record<string, unknown> | null;
   cookies: string;
+  /** Raw Set-Cookie headers, to check cookie attributes. */
+  setCookies: string[];
 }
 
 /** Calls a Better Auth endpoint through its HTTP handler (so rate limits, origin checks and cookies apply). */
@@ -75,11 +77,27 @@ export async function callAuth(
     body?: unknown;
     cookies?: string;
     ip?: string;
+    /** Defaults to the configured base URL; must match the auth instance's own base URL. */
+    baseURL?: string;
+    /** Extra request headers; null removes a default header (such as origin). */
+    headers?: Record<string, string | null>;
   } = {},
 ): Promise<AuthResponse> {
-  const { method = "POST", body, cookies = "", ip = "203.0.113.10" } = options;
-  const baseURL = testAuthEnv().BETTER_AUTH_URL;
+  const {
+    method = "POST",
+    body,
+    cookies = "",
+    ip = "203.0.113.10",
+    baseURL = testAuthEnv().BETTER_AUTH_URL,
+  } = options;
   const headers = new Headers({ origin: baseURL, "x-forwarded-for": ip });
+  for (const [name, value] of Object.entries(options.headers ?? {})) {
+    if (value === null) {
+      headers.delete(name);
+    } else {
+      headers.set(name, value);
+    }
+  }
   if (body !== undefined) {
     headers.set("content-type", "application/json");
   }
@@ -100,10 +118,12 @@ export async function callAuth(
   } catch {
     json = null;
   }
+  const setCookies = response.headers.getSetCookie();
   return {
     status: response.status,
     json,
-    cookies: mergeCookies(cookies, response.headers.getSetCookie()),
+    cookies: mergeCookies(cookies, setCookies),
+    setCookies,
   };
 }
 

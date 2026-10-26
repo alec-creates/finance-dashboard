@@ -56,6 +56,7 @@ export function createAuth(options: CreateAuthOptions) {
     baseURL: options.baseURL,
     trustedOrigins: [options.baseURL],
     database: prismaAdapter(prisma, { provider: "postgresql" }),
+    telemetry: { enabled: false },
 
     emailAndPassword: {
       enabled: true,
@@ -89,6 +90,12 @@ export function createAuth(options: CreateAuthOptions) {
     advanced: {
       cookiePrefix: AUTH_COOKIE_PREFIX,
       useSecureCookies: options.baseURL.startsWith("https://"),
+      // Better Auth turns origin and CSRF checks off by default when NODE_ENV is "test". Pin them on so every
+      // environment, including the integration tests that prove them, behaves like production.
+      disableOriginCheck: false,
+      disableCSRFCheck: false,
+      // Vercel replaces x-forwarded-for with the single client address it saw. Better Auth trusts only a single-value
+      // header, so a spoofed chain falls back to one shared (stricter) rate-limit bucket instead of a fresh one.
       ipAddress: { ipAddressHeaders: ["x-forwarded-for"] },
     },
 

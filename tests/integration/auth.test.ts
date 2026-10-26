@@ -122,7 +122,9 @@ describe("sign-in", () => {
   });
 
   it("refuses sessions for an account whose email is no longer the configured owner", async () => {
-    const authWithNewOwner = createTestAuth(prisma, "new-owner@example.com");
+    const authWithNewOwner = createTestAuth(prisma, {
+      ownerEmail: "new-owner@example.com",
+    });
     const response = await callAuth(authWithNewOwner, "/sign-in/email", {
       body: { email: owner, password: TEST_PASSWORD },
     });
@@ -316,5 +318,88 @@ describe("brute-force protection", () => {
     expect(
       (await prisma.twoFactor.findFirstOrThrow()).lockedUntil?.getTime(),
     ).toBeGreaterThan(Date.now());
+  });
+});
+
+describe("cross-site request protection (origin and CSRF checks)", () => {
+  const evil = "https://evil.example.test";
+
+  it("rejects sign-up from an untrusted origin and creates nothing", async () => {
+    const response = await callAuth(auth, "/sign-up/email", {
+      body: { email: owner, password: TEST_PASSWORD, name: "Owner" },
+      headers: { origin: evil },
+    });
+    expect(response.status).toBe(403);
+    expect(await prisma.user.count()).toBe(0);
+  });
+
+  it("rejects sign-in from an untrusted origin and grants no session", async () => {
+    await signUp(owner);
+    const response = await callAuth(auth, "/sign-in/email", {
+      body: { email: owner, password: TEST_PASSWORD },
+      headers: { origin: evil },
+      ip: "203.0.113.40",
+    });
+    expect(response.status).toBe(403);
+    expect(response.setCookies.join()).not.toContain("session_token=");
+  });
+
+  it("rejects a cross-site form navigation that tries to sign in", async () => {
+    await signUp(owner);
+    const response = await callAuth(auth, "/sign-in/email", {
+      body: { email: owner, password: TEST_PASSWORD },
+      headers: {
+        origin: null,
+        "sec-fetch-site": "cross-site",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-dest": "document",
+      },
+      ip: "203.0.113.41",
+    });
+    expect(response.status).toBe(403);
+  });
+
+  it("rejects cookie-bearing requests from an untrusted origin or with no origin, and keeps the session", async () => {
+    const { cookies } = await signUp(owner);
+    for (const origin of [evil, null]) {
+      const signOut = await callAuth(auth, "/sign-out", {
+        body: {},
+        cookies,
+        headers: { origin },
+      });
+      expect(signOut.status).toBe(403);
+    }
+    expect((await getSession(cookies))?.user).toMatchObject({ email: owner });
+  });
+});
+
+describe("session cookie attributes", () => {
+  const sessionCookie = (setCookies: string[]) =>
+    setCookies.find((cookie) => cookie.includes("finance.session_token="));
+
+  it("is HttpOnly, SameSite=Lax and scoped to the site over local HTTP", async () => {
+    const response = await signUp(owner);
+    const cookie = sessionCookie(response.setCookies);
+    expect(cookie).toMatch(/^finance\.session_token=/);
+    expect(cookie).toMatch(/;\s*HttpOnly/i);
+    expect(cookie).toMatch(/;\s*SameSite=Lax/i);
+    expect(cookie).toMatch(/;\s*Path=\//i);
+    expect(cookie).not.toMatch(/;\s*Domain=/i);
+  });
+
+  it("is Secure with the __Secure- prefix when the site runs on HTTPS", async () => {
+    await signUp(owner);
+    const baseURL = "https://finance.example.test";
+    const httpsAuth = createTestAuth(prisma, { baseURL });
+    const response = await callAuth(httpsAuth, "/sign-in/email", {
+      body: { email: owner, password: TEST_PASSWORD },
+      baseURL,
+    });
+    expect(response.status).toBe(200);
+    const cookie = sessionCookie(response.setCookies);
+    expect(cookie).toMatch(/^__Secure-finance\.session_token=/);
+    expect(cookie).toMatch(/;\s*Secure/i);
+    expect(cookie).toMatch(/;\s*HttpOnly/i);
+    expect(cookie).toMatch(/;\s*SameSite=Lax/i);
   });
 });

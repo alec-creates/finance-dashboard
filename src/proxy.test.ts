@@ -51,4 +51,12 @@ describe("proxy (optimistic session check)", () => {
       proxy(request("/api/accounts", SESSION)).headers.get("x-middleware-next"),
     ).toBe("1");
   });
+
+  it("recognizes the __Secure- cookie that HTTPS deployments use", () => {
+    expect(
+      proxy(request("/", `__Secure-${SESSION}`)).headers.get(
+        "x-middleware-next",
+      ),
+    ).toBe("1");
+  });
 });
