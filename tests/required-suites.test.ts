@@ -26,6 +26,10 @@ const REQUIRED_SUITES = [
   "tests/integration/delete-behaviour.test.ts",
   "tests/integration/precision.test.ts",
   "tests/integration/synthetic-data.test.ts",
+  "src/server/auth/auth-unit.test.ts",
+  "src/proxy.test.ts",
+  "tests/integration/auth.test.ts",
+  "tests/integration/auth-api.test.ts",
 ] as const;
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
