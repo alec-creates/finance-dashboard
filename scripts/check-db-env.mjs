@@ -88,6 +88,39 @@ function report(passed, message) {
 }
 
 const inspected = [];
+const authSecrets = [];
+
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Authentication settings (Phase 1 Task 4). */
+function checkAuthSettings(file, values) {
+  const secret = values.BETTER_AUTH_SECRET ?? "";
+  report(
+    secret.length >= 32 && !secret.startsWith("REPLACE_WITH"),
+    "BETTER_AUTH_SECRET is set (32+ characters)",
+  );
+  let urlOk = false;
+  try {
+    urlOk = ["http:", "https:"].includes(
+      new URL(values.BETTER_AUTH_URL ?? "").protocol,
+    );
+  } catch {
+    urlOk = false;
+  }
+  report(urlOk, "BETTER_AUTH_URL is an http(s) URL");
+  const owner = (values.OWNER_EMAIL ?? "").trim();
+  report(
+    EMAIL.test(owner) && !owner.startsWith("REPLACE_WITH"),
+    "OWNER_EMAIL is set to an email address",
+  );
+  if (file === ".env.test.local") {
+    report(
+      owner.toLowerCase().endsWith("@example.com"),
+      "test OWNER_EMAIL is synthetic (@example.com)",
+    );
+  }
+  authSecrets.push(secret);
+}
 for (const { file, expectedEnv, project } of ENVIRONMENTS) {
   console.log(`\n${file}  (Neon project: ${project})`);
   const exists = existsSync(file);
@@ -153,6 +186,7 @@ for (const { file, expectedEnv, project } of ENVIRONMENTS) {
       },
     });
   }
+  checkAuthSettings(file, values);
 }
 
 if (inspected.length === 2) {
@@ -165,6 +199,10 @@ if (inspected.length === 2) {
   report(
     dev.password !== test.password,
     "development and test use different credentials (separate projects)",
+  );
+  report(
+    authSecrets.length === 2 && authSecrets[0] !== authSecrets[1],
+    "development and test use different BETTER_AUTH_SECRET values",
   );
 }
 
