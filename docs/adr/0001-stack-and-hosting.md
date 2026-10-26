@@ -1,6 +1,6 @@
 # 0001. Stack and $0 hosting
 
-- Status: Accepted
+- Status: Accepted; the local database setup is superseded by ADR-0008
 - Date: 2026-10-25
 
 ## Context
@@ -32,3 +32,10 @@ Plan limits checked on 2026-10-25 (re-check before relying on them):
 - Neon Free's restore window is short, so the app must provide its own data export, and backups are documented as a
   user-run `pg_dump` to local disk.
 - If either provider changes its free plan, we revisit this ADR before paying for anything.
+
+## Amendment (2026-10-26)
+
+- Neon's Free plan, re-checked on its own pages: 100 projects, 10 branches per project, **1 GB storage per project**
+  (20 GB per account), 100 CU-hours per project per month, scale to zero after 5 minutes, **6 hours** of restore
+  history, no credit card required. Reaching a limit suspends compute or blocks writes; no data is deleted.
+- Development and test now use separate Neon projects instead of branches of one project (ADR-0008).

@@ -94,7 +94,11 @@ disabled; do not build multi-user administration or subscriptions.
 
 ## Security and privacy rules
 
-- Secrets only in `.env.local` (local) and Vercel project settings. `.env.example` lists names with empty values.
+- Secrets only in `.env.local` (development), `.env.test.local` (tests) and Vercel project settings (production).
+  `.env.example` lists names with empty values. Never read, print or log the contents of these files; use
+  `npm run db:check-env`, which reports pass/fail only.
+- Development, test and production use **separate Neon projects** (ADR-0008). Database tests and reset helpers must
+  refuse to run unless `DATABASE_ENV=test` and the host differs from development. Real data lives only in production.
 - Never commit real CSVs, statements, screenshots of real data, or database dumps (see `.gitignore`).
 - Synthetic data only in fixtures, seeds, demos and screenshots. The public demo uses its own database.
 - Never log balances, amounts with merchant names, account numbers, tokens or raw provider payloads.
@@ -112,14 +116,15 @@ disabled; do not build multi-user administration or subscriptions.
 
 ## Commands
 
-| Command                 | Purpose                                           |
-| ----------------------- | ------------------------------------------------- |
-| `npm run dev`           | Start the dev server on http://localhost:3000     |
-| `npm run check`         | Format check, lint, typecheck, unit tests (CI)    |
-| `npm run build`         | Production build                                  |
-| `npm test`              | Run Vitest once (`npm run test:watch` to iterate) |
-| `npm run format`        | Apply Prettier                                    |
-| `npm run test:coverage` | Coverage report in `coverage/`                    |
+| Command                 | Purpose                                             |
+| ----------------------- | --------------------------------------------------- |
+| `npm run dev`           | Start the dev server on http://localhost:3000       |
+| `npm run check`         | Format check, lint, typecheck, unit tests (CI)      |
+| `npm run build`         | Production build                                    |
+| `npm test`              | Run Vitest once (`npm run test:watch` to iterate)   |
+| `npm run format`        | Apply Prettier                                      |
+| `npm run test:coverage` | Coverage report in `coverage/`                      |
+| `npm run db:check-env`  | Validate local database env files (no values shown) |
 
 ## Development workflow
 

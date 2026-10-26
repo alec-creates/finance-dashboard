@@ -22,10 +22,63 @@ category set, a default dashboard layout), but no logic depends on a specific na
 `Int` cents caps a single value at about $21.4M, which is far above this app's range and documented in ADR-0002.
 Value = quantity x price is computed in decimal and rounded half-even to cents once.
 
+## Integrity rules (ADR-0009)
+
+These apply to every model below; the pseudo-Prisma omits them for brevity.
+
+**Ownership is enforced by the database.** Every user-owned table has a `userId` column. Parent tables declare
+`@@unique([id, userId])`, and children reference them through composite relations that include `userId`, e.g.
+`Transaction (accountId, userId) -> FinancialAccount (id, userId)` and
+`TransactionSplit (categoryId, userId) -> Category (id, userId)`. A row can therefore never point at another user's
+account, category, plan or goal, and a child's `userId` can never disagree with its parent's.
+
+**One sign convention everywhere: the owner's net-worth view.** Positive means the owner has more; negative means less.
+
+| Event            | Account                                 | `amountCents` |
+| ---------------- | --------------------------------------- | ------------- |
+| Paycheck deposit | checking                                | `+`           |
+| Card purchase    | credit card                             | `-`           |
+| Card payment     | checking `-` / credit card `+` (paired) | both legs     |
+| Refund to card   | credit card                             | `+`           |
+
+Balances follow the same rule: a card or loan balance owed is stored **negative** (owing $420 is `-42000`), so net
+worth is a plain sum of the latest balances and valuations of accounts with `includeInNetWorth`. Provider adapters
+convert their own conventions on import (Plaid, for example, reports card balances as positive amounts owed).
+
+**Delete behaviour (`onDelete`).**
+
+| Deleting                                     | Effect                                                                                       |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| User                                         | Cascades to everything the user owns                                                         |
+| Import batch (undo import)                   | Deletes its transactions and their splits; the UI warns first if any were reviewed or edited |
+| Transaction                                  | Cascades to its splits                                                                       |
+| Financial account, category, merchant, asset | Restricted while history references them; archive instead (`archivedAt`)                     |
+| Contribution plan, recurring series, goal    | Soft delete (`deletedAt` / `status`) so matched history keeps its link                       |
+
+**Database constraints** added as SQL in the migration where Prisma cannot express them:
+
+- `Budget.month` is the first day of a month.
+- `investmentType` is set if and only if `type = INVESTMENT`.
+- Fractions (`percent`, `share`, `takeHomeRatio`, `contributionPercentOverride`) are between 0 and 1.
+- Non-negative amounts: budgets, minimums, fixed contribution amounts, overrides, goal targets, tolerances,
+  `minimumBalanceCents`.
+- `ContributionOverride` either skips or has an amount.
+- Category names are unique per user and parent (`NULLS NOT DISTINCT`, so top-level names are unique too); merchant
+  match keys are unique per user.
+
+**App-level invariants** (enforced in services, covered by tests, and checked by an integrity query): splits sum
+exactly to their transaction's amount; allocation shares sum to exactly 1; goal allocations on an account do not
+exceed its balance; budget hierarchy (below).
+
+**Every table** has `createdAt` and `updatedAt`. IDs are `cuid()` strings.
+
 ## Identity and settings
 
 ```prisma
-model User         { id, email @unique, name, createdAt }   // + Better Auth tables (Session, Account, Verification, TwoFactor/Passkey)
+model User         { id, name, email @unique, emailVerified, image?, createdAt, updatedAt }
+                   // Shape owned by Better Auth: generated with its CLI together with Session, Account (auth
+                   // provider links, not financial accounts), Verification and the 2FA/passkey plugin tables.
+                   // All app tables reference User.id with onDelete: Cascade.
 model UserSettings {
   userId PK, timeZone String,               // IANA, e.g. "America/Chicago"
   currency String @default("USD"),
@@ -35,7 +88,7 @@ model UserSettings {
 
 model SafeToSpendSettings {
   userId PK
-  spendingAccountIds String[]               // which cash accounts count as spendable (e.g. a checking account)
+  // Spendable accounts are chosen with FinancialAccount.includeInSafeToSpend (a real relation, not an id list).
   applyCushion Boolean @default(true)       // subtract each account's minimumBalanceCents
   horizon SafeToSpendHorizon @default(NEXT_PAYDAY) // NEXT_PAYDAY | END_OF_MONTH | DAYS
   horizonDays Int?                          // when horizon = DAYS
@@ -63,16 +116,21 @@ model FinancialAccount {
   type AccountType   // CHECKING | SAVINGS | CREDIT_CARD | INVESTMENT | CASH | OTHER_ASSET | LOAN | OTHER_LIABILITY
   investmentType InvestmentAccountType? // required when type = INVESTMENT:
                      // TAXABLE_BROKERAGE | TRADITIONAL_IRA | ROTH_IRA | CRYPTO_EXCHANGE | OTHER_INVESTMENT
-  isLiability Boolean // derived from type, stored for fast net-worth queries
+  // No stored isLiability: liability types (CREDIT_CARD, LOAN, OTHER_LIABILITY) are known from `type`, and
+  // their balances are negative by the sign convention, so nothing can drift out of sync.
   currency String @default("USD")
   includeInNetWorth Boolean @default(true)
-  minimumBalanceCents Int?               // optional cushion used by Safe to Spend
+  includeInSafeToSpend Boolean @default(false)
+  minimumBalanceCents Int?               // optional cushion used by Safe to Spend (>= 0)
   historyCompleteFrom DateTime? @db.Date  // earliest date with complete transaction history (gates realized gains)
   archivedAt
+  @@unique([id, userId])
 }
 
 model BalanceSnapshot {          // historical balances for cash/credit/manual accounts
-  id, accountId, asOfDate @db.Date, balanceCents Int, availableCents Int?
+  id, userId, accountId, asOfDate @db.Date
+  balanceCents Int               // signed: card/loan balances owed are negative
+  availableCents Int?
   source SnapshotSource          // PROVIDER | STATEMENT | MANUAL | COMPUTED
   @@unique([accountId, asOfDate, source])
 }
@@ -87,7 +145,7 @@ snapshots, so net worth has one code path.
 model Transaction {
   id, userId, accountId
   date @db.Date, authorizedDate @db.Date?
-  amountCents Int                 // signed from the account's view: negative = money out
+  amountCents Int                 // signed, owner's net-worth view (see Integrity rules): negative = less money
   description String              // raw text, never edited
   merchantId?
   kind TxnKind                    // INCOME | EXPENSE | REFUND | TRANSFER | CREDIT_CARD_PAYMENT
@@ -96,6 +154,8 @@ model Transaction {
   reviewStatus ReviewStatus       // NEEDS_REVIEW | CONFIRMED
   categorySource CategorySource   // RULE | MERCHANT_MEMORY | PROVIDER | MANUAL | NONE
   appliedRuleId?, incomeSourceId?
+  recurringSeriesId?              // set when matched to a recurring bill/income occurrence (Safe to Spend "paid")
+  contributionPlanId?             // set when matched to a contribution plan (planned vs actual)
   excludeFromBudget Boolean @default(false)
   notes String?
   transferPairId String?          // both legs of a transfer / card payment / investment contribution share it
@@ -104,13 +164,20 @@ model Transaction {
   importBatchId?
   raw Json                        // original row or payload
   splits TransactionSplit[]
-  @@unique([accountId, externalId])
+  @@unique([accountId, externalId]) @@unique([id, userId])
   @@index([userId, date]) @@index([userId, reviewStatus]) @@index([accountId, fingerprint])
+  @@index([recurringSeriesId]) @@index([contributionPlanId])
 }
 
-model TransactionSplit { id, transactionId, categoryId, amountCents Int, note? }   // >= 1 per transaction, sum == amountCents
-model Category  { id, userId, name, parentId?, type CategoryType /* EXPENSE | INCOME */, isEssential Boolean, color, sortOrder, archivedAt }
-model Merchant  { id, userId, name, matchKey @unique per user, defaultCategoryId? }
+model TransactionSplit {          // >= 1 per transaction, sum == amountCents
+  id, userId, transactionId
+  categoryId?                     // null until categorized; always null for transfers, card payments, contributions
+  amountCents Int, note?
+  @@index([userId, categoryId])
+}
+model Category  { id, userId, name, parentId?, type CategoryType /* EXPENSE | INCOME */, isEssential Boolean, color, sortOrder, archivedAt
+                  @@unique([id, userId]) /* + unique (userId, parentId, name) NULLS NOT DISTINCT */ }
+model Merchant  { id, userId, name, matchKey, defaultCategoryId?; @@unique([userId, matchKey]) }
 model CategorizationRule {
   id, userId, priority Int, isActive
   field RuleField /* DESCRIPTION | MERCHANT */, matchType MatchType /* CONTAINS | EQUALS | STARTS_WITH | REGEX */, pattern
@@ -150,23 +217,28 @@ model InvestmentTransaction {
   type InvTxnType  // BUY | SELL | DIVIDEND | INTEREST | FEE | DEPOSIT | WITHDRAWAL | TRANSFER_IN | TRANSFER_OUT
                    // | STAKING_REWARD | SPLIT | CORPORATE_ACTION | OTHER
   quantity Decimal(38,18)?, unitPrice Decimal(24,10)?
-  cashAmountCents Int              // signed effect on the account's USD cash
+  cashAmountCents Int              // signed effect on the account's USD cash (0 for crypto-to-crypto legs)
+  usdValueCents Int?               // fair USD value of this leg at trade time; required when there is no USD cash
+                                   // leg (crypto-to-crypto trades, staking rewards, transfers in) so cost basis works
+  usdValueSource ValuationSource?  // PROVIDER | PRICE_HISTORY | MANUAL
   feeCents Int @default(0), feeAssetId?, feeQuantity Decimal(38,18)?
   groupRef String?                 // links legs of one event (Kraken ledger refid, crypto-to-crypto trades)
   linkedCashTransactionId?         // the bank leg of a deposit/withdrawal
   contributionTaxYear Int?         // IRA deposits: the tax year the contribution counts toward
   externalId?, fingerprint, importBatchId?, raw Json
+  @@unique([accountId, externalId])
+  @@index([accountId, tradeDate]) @@index([userId, assetId])
 }
 
 model HoldingSnapshot {            // positions as reported or computed at a date
-  id, accountId, assetId, asOfDate @db.Date
+  id, userId, accountId, assetId, asOfDate @db.Date
   quantity Decimal(38,18), costBasisCents Int?, priceUsed Decimal(24,10)?, marketValueCents Int?
   source SnapshotSource
   @@unique([accountId, assetId, asOfDate, source])
 }
 
 model PortfolioValuation {         // total account value at a date; never interpolated
-  id, accountId, asOfDate @db.Date, marketValueCents Int, cashCents Int, source SnapshotSource
+  id, userId, accountId, asOfDate @db.Date, marketValueCents Int, cashCents Int, source SnapshotSource
   @@unique([accountId, asOfDate, source])
 }
 ```
@@ -212,8 +284,9 @@ model ContributionPlan {
   status PlanStatus                          // ACTIVE | PAUSED
   effectiveFrom @db.Date, effectiveTo @db.Date?, deletedAt?
 }
-model ContributionAllocation { id, planId, targetAccountId, share Decimal(7,6) }   // e.g. 0.7 / 0.3; shares sum to 1
-model ContributionOverride   { id, planId, scheduledDate @db.Date, amountCents Int?, skip Boolean, note? }
+model ContributionAllocation { id, userId, planId, targetAccountId, share Decimal(7,6) }   // e.g. 0.7 / 0.3; sum to 1
+model ContributionOverride   { id, userId, planId, scheduledDate @db.Date, amountCents Int?, skip Boolean, note?
+                               @@unique([planId, scheduledDate]) }
 ```
 
 Planned targets are computed, never stored:
@@ -226,9 +299,10 @@ Planned targets are computed, never stored:
 Each target is `max(minimum, round_half_even(x))`, then an override replaces it or skips it, and it is split across
 allocations with largest-remainder rounding so the parts sum exactly. Paused plans and deleted plans produce no targets
 (history of actual contributions is kept). Actual = `INVESTMENT_CONTRIBUTION` transactions from `sourceAccountId` to an
-allocation's account, matched to the target period, and linked to the investment account's `DEPOSIT` via
-`transferPairId` / `linkedCashTransactionId` so the money is counted once. Contributions into a Roth IRA are
-contributions, never expenses.
+allocation's account, matched to a target period and stamped with `Transaction.contributionPlanId` (so several plans
+never claim the same transfer), and linked to the investment account's `DEPOSIT` via `transferPairId` /
+`linkedCashTransactionId` so the money is counted once. Contributions into a Roth IRA are contributions, never
+expenses.
 
 ## Budgets, recurring items, goals, forecasts, net worth
 
@@ -238,13 +312,17 @@ model RecurringSeries  { id, userId, name, merchantId?, accountId, categoryId?, 
                          schedule Json, nextExpectedDate @db.Date, status /* SUGGESTED | ACTIVE | DISMISSED */ }
 model SavingsGoal      { id, userId, name, targetCents, targetDate @db.Date?, linkedAccountId?, monthlyTargetCents?,
                          priority Int, status /* ACTIVE | PAUSED | COMPLETED | ARCHIVED */ }
-model GoalLedgerEntry  { id, goalId, accountId, date @db.Date, amountCents Int /* signed */, type /* ALLOCATE | RELEASE | WITHDRAW */, note? }
+model GoalLedgerEntry  { id, userId, goalId, accountId, date @db.Date, amountCents Int /* signed */, type /* ALLOCATE | RELEASE | WITHDRAW */, note?
+                         @@index([goalId]) @@index([accountId]) }
 model ForecastScenario { id, userId, name, baseline /* HISTORICAL | BUDGET */, lookbackMonths, contributionPercentOverride Decimal(7,6)?,
                          categoryAdjustments Json, marketGrowthAnnual Decimal(7,6)? /* null = no growth */, includeGoals Boolean }
 model NetWorthSnapshot { userId, asOfDate @db.Date, assetsCents, liabilitiesCents, cashCents, investmentsCents, otherAssetsCents,
                          completeness Json /* accounts missing data for that date */; @@id([userId, asOfDate]) }
 ```
 
+- **Budget hierarchy:** budgets may be set on a parent or a child category, but within one month a category can have a
+  budget only if none of its ancestors or descendants does. A parent's spending includes its children, so totals never
+  count the same dollar twice.
 - **Goals never double count:** a goal's saved amount is the sum of its ledger entries, and for each account the sum of
   all goals' allocations must not exceed the account balance (the UI warns and blocks new allocations).
 - **Net worth history** is derived from balance snapshots and portfolio valuations and cached in `NetWorthSnapshot`
@@ -258,9 +336,9 @@ model NetWorthSnapshot { userId, asOfDate @db.Date, assetsCents, liabilitiesCent
 For the horizon in `SafeToSpendSettings` (default: today until the day before the next expected paycheck):
 
 ```
-  available balance of the spending accounts
+  available balance of accounts with includeInSafeToSpend
 - their minimum balances                       (if applyCushion)
-- recurring bills due in the horizon and not yet paid
+- recurring bills due in the horizon and not yet paid (occurrences with no transaction matched via recurringSeriesId)
 - remaining expected essential spending        (essential-category budgets, or history, prorated to the horizon, minus spent)
 - planned investment contributions due          (if includePlannedInvestments)
 - planned goal contributions due                (if includeGoalContributions)
@@ -299,3 +377,7 @@ widget types in saved JSON are skipped, not errors.
 | Buys/sells               | `InvestmentTransaction` inside the investment account; never spending |
 
 Cash remaining = income - living expenses - net contributions. Contribution rate = net contributions / income.
+
+Because amounts are signed (purchases negative, refunds positive), living expenses for a period are reported as a
+positive number: `spending = -(sum of the signed EXPENSE and REFUND splits)`. A refund larger than the month's purchases
+in a category correctly yields negative spending for that category.

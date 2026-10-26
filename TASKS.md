@@ -15,10 +15,17 @@ and a polished default dashboard built from reusable widgets, deployed with synt
       (fractions, shares, ratios), `dates.ts` (calendar dates, months, time zones), `schedules.ts` (weekly, biweekly,
       semimonthly, monthly, every N days/months, weekend adjustment), `contributions.ts` (fixed / % of income /
       % of paycheck targets, splits); unit tests; test run fails if a required suite is missing
-- [ ] **3. Database**: Neon project with `dev` and `test` branches, full Prisma schema from `docs/data-model.md`
-      (including investment account types, contribution plans, Safe to Spend settings, dashboard layouts), first
-      migration, env validation (Zod), deterministic synthetic data generator (about 18 months, bank, card, taxable
-      brokerage and crypto accounts, several pay and contribution schedules, including 3-paycheck months)
+- [ ] **3. Database**
+  - [x] Design review: 11 fixes applied to `docs/data-model.md` (ADR-0009); isolated environments (ADR-0008)
+  - [x] Local env files with placeholders (gitignored) and `npm run db:check-env`
+  - [ ] Owner creates Neon projects `finance-dashboard-dev` and `finance-dashboard-test` and fills in the env files;
+        `npm run db:check-env` passes
+  - [ ] Prisma 7.10.1 (pinned), `prisma.config.ts`, full schema from `docs/data-model.md` with composite ownership
+        relations, SQL constraints, first migration on dev and test
+  - [ ] Env validation (Zod) and test-database guard (`DATABASE_ENV=test`, host differs from development)
+  - [ ] Deterministic synthetic data generator (about 18 months: bank, card, taxable brokerage and crypto accounts,
+        several pay and contribution schedules, including 3-paycheck months)
+  - [ ] Integration tests: ownership isolation, sign convention, constraints, delete behaviour
 - [ ] **4. Authentication**: Better Auth, single allowlisted email, no public sign-up, second factor, protected routes,
       user-ownership test
 - [ ] **5. App shell**: shadcn/ui, mobile bottom tabs / desktop sidebar, light/dark, PWA manifest and icons
