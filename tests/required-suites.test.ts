@@ -22,6 +22,9 @@ const REQUIRED_SUITES = [
   "src/lib/time-zone.test.ts",
   "src/server/db/environment.test.ts",
   "src/server/env.test.ts",
+  "src/server/deployment.test.ts",
+  "src/server/db/production.test.ts",
+  "tests/deployment-config.test.ts",
   "src/server/synthetic/generate.test.ts",
   // Database integration suites (run with npm run test:integration against the test database).
   "tests/integration/isolation.test.ts",

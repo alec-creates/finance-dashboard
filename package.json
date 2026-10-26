@@ -28,7 +28,12 @@
     "db:status:test": "tsx scripts/db.ts test migrate status",
     "db:seed": "tsx scripts/db.ts development db seed",
     "test:integration": "vitest run --config vitest.integration.config.mts",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "db:fingerprint": "tsx scripts/database-fingerprint.ts",
+    "db:production:check": "tsx scripts/production-migrations.mts check",
+    "db:production:verify-current": "tsx scripts/production-migrations.mts check --expect-current",
+    "db:production:migrate": "tsx scripts/db.ts production migrate deploy",
+    "test:e2e": "next build && playwright test"
   },
   "dependencies": {
     "@next/env": "16.4.3",
@@ -50,6 +55,7 @@
     "zod": "4.6.7"
   },
   "devDependencies": {
+    "@playwright/test": "1.64.1",
     "@tailwindcss/turbopack": "^4",
     "@types/node": "^22.20.5",
     "@types/qrcode": "1.5.6",

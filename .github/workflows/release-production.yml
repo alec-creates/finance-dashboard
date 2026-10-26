@@ -1,0 +1,95 @@
+name: Release production
+
+# The only way to change the production database, and the only way to deploy the production app (ADR-0011,
+# docs/deployment.md). Started by hand from the Actions tab, on main only. The "production" environment holds the
+# secrets and requires the owner's approval before any job that uses them starts.
+#
+#   status:  read-only preflight (database identity, applied and pending migrations)
+#   release: preflight -> prisma migrate deploy -> verify nothing is pending -> deploy the app on Vercel
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "status = read-only check; release = migrate, then deploy the app"
+        type: choice
+        options: [status, release]
+        default: status
+      confirm:
+        description: 'For release, type "release production"'
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-production
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: ${{ inputs.action }}
+    # Never from another branch, even if someone starts it there.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 20
+    env:
+      # Not secret: the expected database's SHA-256 fingerprint (npm run db:fingerprint).
+      PRODUCTION_DATABASE_FINGERPRINT: ${{ vars.PRODUCTION_DATABASE_FINGERPRINT }}
+      DATABASE_ENV: production
+    steps:
+      - name: Require confirmation for a release
+        if: inputs.action == 'release' && inputs.confirm != 'release production'
+        run: |
+          echo "Type 'release production' in the confirm field to run a release."
+          exit 1
+
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      # Dependencies' install scripts never run here, and no step before the database steps can see the secret.
+      - name: Install dependencies (no install scripts)
+        run: npm ci --ignore-scripts
+
+      - name: Generate the Prisma client (no database access)
+        run: npx prisma generate
+
+      - name: Preflight (read-only)
+        run: npm run db:production:check
+        env:
+          DIRECT_URL: ${{ secrets.PRODUCTION_DIRECT_URL }}
+
+      - name: Apply migrations (prisma migrate deploy only)
+        if: inputs.action == 'release'
+        run: npm run db:production:migrate
+        env:
+          DIRECT_URL: ${{ secrets.PRODUCTION_DIRECT_URL }}
+
+      - name: Verify nothing is pending (read-only)
+        if: inputs.action == 'release'
+        run: npm run db:production:verify-current
+        env:
+          DIRECT_URL: ${{ secrets.PRODUCTION_DIRECT_URL }}
+
+      # The deploy hook builds the latest main, so only release if this run's commit still is the latest main.
+      - name: Check this commit is still the head of main
+        if: inputs.action == 'release'
+        run: |
+          head="$(git ls-remote "https://github.com/${GITHUB_REPOSITORY}.git" refs/heads/main | cut -f1)"
+          if [ "$head" != "$GITHUB_SHA" ]; then
+            echo "main moved after this run started; start a new release from the latest main."
+            exit 1
+          fi
+
+      - name: Deploy the app on Vercel
+        if: inputs.action == 'release'
+        run: curl --fail --silent --show-error --output /dev/null --request POST "$VERCEL_DEPLOY_HOOK"
+        env:
+          VERCEL_DEPLOY_HOOK: ${{ secrets.VERCEL_PRODUCTION_DEPLOY_HOOK }}
