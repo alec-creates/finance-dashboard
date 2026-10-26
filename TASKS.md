@@ -95,7 +95,7 @@ dashboard, all responsive on phone and desktop at $0 recurring cost.
     explicit confirmation bound to that date, enforced by the server (4 unit and 2 integration tests added).
   - Known minor follow-ups: account history shows the latest 60 entries without pagination; Server Actions have no
     tests of their own (ownership is tested in the service layer they call).
-- [ ] **7. Transactions and categories**: starter categories, a transaction list, manual entry with kind and splits
+- [x] **7. Transactions and categories**: starter categories, a transaction list, manual entry with kind and splits
   - Acceptance:
     - A new user gets an editable starter set of two-level categories with an essential flag. Categories can be
       added, renamed and archived.
@@ -105,6 +105,16 @@ dashboard, all responsive on phone and desktop at $0 recurring cost.
       in the form, the service and the database.
     - Tests cover refunds, transfers and card payments (excluded from income and spending), multi-split rounding and
       ownership.
+  - Done (2026-10-26): starter categories (8 groups, 20 subcategories) created once per owner; category page to add,
+    rename, mark essential, archive and restore. Transactions page with month navigation, account filter, income /
+    spending / net totals by kind and a "not counted" note. Manual add/edit/delete with all eight kinds, money-in/out
+    for movements, uncategorized or split across up to 20 categories (divide evenly to the cent, live remaining
+    amount). The service re-checks signs, split sums, category ownership/type/archival and account ownership; imported
+    rows are read-only. 29 unit and 18 integration tests (card purchase vs payment, refunds, transfers, splits,
+    month boundaries, editing, archived categories, untouched balance snapshots, cross-user accounts, categories and
+    transactions; verified to fail when category scoping is removed). Checked in a browser at 375 px and 1280 px.
+  - Follow-ups: transfer and card-payment legs are not linked (Task 10 pairing); "this month" uses UTC until a time
+    zone setting exists; no search or pagination within a month (Phase 2).
 - [ ] **8. Production deploy** (milestone A: technical deployment): Vercel Hobby + Neon production project, PWA basics,
       testing state
   - Acceptance:

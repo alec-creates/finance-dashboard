@@ -226,6 +226,23 @@ Rules: lowest `priority` wins; ties go to the oldest rule. Dedupe: provider `ext
 `fingerprint = hash(accountId, date, amountCents, normalizedDescription, occurrenceIndexWithinFile)`, and near matches
 (same amount, +/-2 days) are flagged for review, never dropped silently.
 
+**Manual transactions** (`src/lib/transactions.ts`, `src/server/services/transactions.ts`):
+
+- The form takes a positive amount; the kind fixes the sign for income (+), refunds (+) and expenses (-), and the
+  owner picks money in or out for transfers, card payments, contributions, withdrawals and adjustments.
+- Splits share the transaction's sign, are non-zero and sum exactly; "divide evenly" uses largest-remainder cents.
+  Expenses and refunds take spending categories, income takes income categories, and every other kind has a single
+  uncategorized split. A transaction may stay uncategorized; totals still count it by kind.
+- Period totals: income = INCOME; spending = -(EXPENSE + REFUND); net = income - spending. Every other kind is listed
+  but not counted, so recording both legs of a card payment or transfer never double counts. Legs are not linked yet
+  (pairing suggestions come with the review queue).
+- Manual rows are `reviewStatus = CONFIRMED`, have no `raw` row, and get `fingerprint = "manual:<uuid>"` so a later CSV
+  import never treats them as exact duplicates; matching an import to a manual entry is a reviewed step. Rows with an
+  `importBatchId` or `externalId` can't be edited or deleted in the app. Transactions never change balance snapshots.
+- Categories have two levels; a subcategory takes its parent's type. A parent can be archived only after its
+  subcategories; archived categories stay on existing splits but can't be chosen for new ones. A new owner gets an
+  editable starter set once (never refilled).
+
 ## Investments (e.g. a taxable brokerage account, a Roth IRA at the same broker, a crypto exchange)
 
 Each investment account is its own `FinancialAccount` with an `investmentType`. A Roth IRA at the same broker as a
