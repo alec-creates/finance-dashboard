@@ -1,0 +1,949 @@
+// Prisma schema for the finance dashboard. Design and rules: docs/data-model.md, ADR-0002, ADR-0008, ADR-0009.
+//
+// Conventions
+// - USD amounts are Int cents; quantities, prices, rates and fractions are Decimal (ADR-0002).
+// - Amounts and balances are signed from the owner's net-worth view: + more money, - less (ADR-0009).
+// - Every user-owned row has userId. Children reference parents through composite (id, userId) relations, so a row can
+//   never point at another user's data. "Restricted" relations use NoAction (checked at end of statement) so that a
+//   cascading user delete can remove parents and children in one statement.
+// - Optional composite relations never use SetNull: it would null userId too. Those parents are archived or
+//   soft-deleted instead.
+// - Constraints Prisma cannot express (CHECKs, NULLS NOT DISTINCT, the split-sum trigger) live in the migration SQL.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// =====================================================================================================================
+// Enums
+
+enum AccountType {
+  CHECKING
+  SAVINGS
+  CREDIT_CARD
+  INVESTMENT
+  CASH
+  OTHER_ASSET
+  LOAN
+  OTHER_LIABILITY
+}
+
+enum InvestmentAccountType {
+  TAXABLE_BROKERAGE
+  TRADITIONAL_IRA
+  ROTH_IRA
+  CRYPTO_EXCHANGE
+  OTHER_INVESTMENT
+}
+
+enum Provider {
+  MANUAL
+  CSV
+  PLAID
+  KRAKEN
+  WEBULL
+}
+
+enum ConnectionStatus {
+  ACTIVE
+  NEEDS_REAUTH
+  ERROR
+  DISCONNECTED
+}
+
+enum SnapshotSource {
+  PROVIDER
+  STATEMENT
+  MANUAL
+  COMPUTED
+}
+
+enum TxnKind {
+  INCOME
+  EXPENSE
+  REFUND
+  TRANSFER
+  CREDIT_CARD_PAYMENT
+  INVESTMENT_CONTRIBUTION
+  INVESTMENT_WITHDRAWAL
+  ADJUSTMENT
+}
+
+enum TxnStatus {
+  PENDING
+  POSTED
+}
+
+enum ReviewStatus {
+  NEEDS_REVIEW
+  CONFIRMED
+}
+
+enum CategorySource {
+  RULE
+  MERCHANT_MEMORY
+  PROVIDER
+  MANUAL
+  NONE
+}
+
+enum CategoryType {
+  EXPENSE
+  INCOME
+}
+
+enum RuleField {
+  DESCRIPTION
+  MERCHANT
+}
+
+enum MatchType {
+  CONTAINS
+  EQUALS
+  STARTS_WITH
+  REGEX
+}
+
+enum ImportSource {
+  CSV
+  PROVIDER_SYNC
+}
+
+enum ImportStatus {
+  PREVIEW
+  COMMITTED
+  REVERTED
+}
+
+enum AmountConvention {
+  NEGATIVE_IS_OUTFLOW
+  POSITIVE_IS_OUTFLOW
+  SEPARATE_DEBIT_CREDIT_COLUMNS
+}
+
+enum AssetClass {
+  EQUITY
+  ETF
+  MUTUAL_FUND
+  CRYPTO
+  CASH
+  OPTION // reserved; no options logic is planned
+  OTHER
+}
+
+enum InvTxnType {
+  BUY
+  SELL
+  DIVIDEND
+  INTEREST
+  FEE
+  DEPOSIT
+  WITHDRAWAL
+  TRANSFER_IN
+  TRANSFER_OUT
+  STAKING_REWARD
+  SPLIT
+  CORPORATE_ACTION
+  OTHER
+}
+
+enum ValuationSource {
+  PROVIDER
+  PRICE_HISTORY
+  MANUAL
+}
+
+enum IncomeType {
+  HOURLY
+  SALARY
+  COMMISSION
+  BONUS
+  OTHER
+}
+
+enum ContributionRuleType {
+  FIXED_AMOUNT
+  PERCENT_OF_INCOME
+  PERCENT_OF_PAYCHECK
+}
+
+enum PlanStatus {
+  ACTIVE
+  PAUSED
+}
+
+enum RecurringStatus {
+  SUGGESTED
+  ACTIVE
+  DISMISSED
+}
+
+enum GoalStatus {
+  ACTIVE
+  PAUSED
+  COMPLETED
+  ARCHIVED
+}
+
+enum GoalEntryType {
+  ALLOCATE
+  RELEASE
+  WITHDRAW
+}
+
+enum ForecastBaseline {
+  HISTORICAL
+  BUDGET
+}
+
+enum SafeToSpendHorizon {
+  NEXT_PAYDAY
+  END_OF_MONTH
+  DAYS
+}
+
+enum LayoutBreakpoint {
+  MOBILE
+  DESKTOP
+}
+
+enum CostBasisMethod {
+  FIFO
+}
+
+// =====================================================================================================================
+// Authentication: Better Auth core schema (user, session, account, verification). Plugin tables (two-factor,
+// passkeys) are added in Phase 1 Task 4 with the Better Auth CLI. "Account" here is a sign-in method, not a
+// financial account.
+
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  image         String?
+  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime  @updatedAt @db.Timestamptz(3)
+  sessions      Session[]
+  accounts      Account[]
+
+  settings                UserSettings?
+  safeToSpendSettings     SafeToSpendSettings?
+  connections             Connection[]
+  financialAccounts       FinancialAccount[]
+  balanceSnapshots        BalanceSnapshot[]
+  transactions            Transaction[]
+  transactionSplits       TransactionSplit[]
+  categories              Category[]
+  merchants               Merchant[]
+  categorizationRules     CategorizationRule[]
+  importBatches           ImportBatch[]
+  csvImportProfiles       CsvImportProfile[]
+  investmentTransactions  InvestmentTransaction[]
+  holdingSnapshots        HoldingSnapshot[]
+  portfolioValuations     PortfolioValuation[]
+  incomeSources           IncomeSource[]
+  contributionPlans       ContributionPlan[]
+  contributionAllocations ContributionAllocation[]
+  contributionOverrides   ContributionOverride[]
+  budgets                 Budget[]
+  recurringSeries         RecurringSeries[]
+  savingsGoals            SavingsGoal[]
+  goalLedgerEntries       GoalLedgerEntry[]
+  forecastScenarios       ForecastScenario[]
+  netWorthSnapshots       NetWorthSnapshot[]
+  dashboardLayouts        DashboardLayout[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  expiresAt DateTime @db.Timestamptz(3)
+  token     String   @unique
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([userId])
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime? @db.Timestamptz(3)
+  refreshTokenExpiresAt DateTime? @db.Timestamptz(3)
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime  @updatedAt @db.Timestamptz(3)
+
+  @@index([userId])
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime @db.Timestamptz(3)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([identifier])
+}
+
+// =====================================================================================================================
+// Settings
+
+model UserSettings {
+  userId                 String          @id
+  user                   User            @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  timeZone               String // IANA zone, e.g. "America/New_York"
+  currency               String          @default("USD")
+  costBasisMethod        CostBasisMethod @default(FIFO)
+  forecastLookbackMonths Int             @default(6)
+  createdAt              DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime        @updatedAt @db.Timestamptz(3)
+}
+
+/// Spendable accounts are chosen with FinancialAccount.includeInSafeToSpend.
+model SafeToSpendSettings {
+  userId                    String             @id
+  user                      User               @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  applyCushion              Boolean            @default(true)
+  horizon                   SafeToSpendHorizon @default(NEXT_PAYDAY)
+  horizonDays               Int?
+  includeGoalContributions  Boolean            @default(true)
+  includePlannedInvestments Boolean            @default(true)
+  createdAt                 DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt                 DateTime           @updatedAt @db.Timestamptz(3)
+}
+
+// =====================================================================================================================
+// Connections and accounts
+
+model Connection {
+  id                   String             @id @default(cuid())
+  userId               String
+  user                 User               @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  provider             Provider
+  institutionName      String?
+  status               ConnectionStatus   @default(ACTIVE)
+  encryptedCredentials Bytes? // AES-256-GCM; never sent to the browser or logged
+  credentialKeyVersion Int?
+  syncCursor           String?
+  lastSyncAttemptAt    DateTime?          @db.Timestamptz(3)
+  lastSyncSuccessAt    DateTime?          @db.Timestamptz(3)
+  lastErrorCode        String?
+  lastErrorMessage     String? // sanitized; never a raw provider payload
+  createdAt            DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime           @updatedAt @db.Timestamptz(3)
+  accounts             FinancialAccount[]
+
+  @@unique([id, userId])
+  @@index([userId])
+}
+
+model FinancialAccount {
+  id                   String                 @id @default(cuid())
+  userId               String
+  user                 User                   @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  connectionId         String?
+  connection           Connection?            @relation(fields: [connectionId, userId], references: [id, userId], onDelete: NoAction, onUpdate: NoAction)
+  name                 String
+  institutionName      String?
+  mask                 String? // last digits only
+  externalId           String?
+  type                 AccountType
+  investmentType       InvestmentAccountType? // set if and only if type = INVESTMENT
+  currency             String                 @default("USD")
+  includeInNetWorth    Boolean                @default(true)
+  includeInSafeToSpend Boolean                @default(false)
+  minimumBalanceCents  Int? // Safe to Spend cushion, >= 0
+  historyCompleteFrom  DateTime?              @db.Date
+  archivedAt           DateTime?              @db.Timestamptz(3)
+  createdAt            DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime               @updatedAt @db.Timestamptz(3)
+
+  balanceSnapshots        BalanceSnapshot[]
+  transactions            Transaction[]
+  importBatches           ImportBatch[]
+  categorizationRules     CategorizationRule[]
+  investmentTransactions  InvestmentTransaction[]
+  holdingSnapshots        HoldingSnapshot[]
+  portfolioValuations     PortfolioValuation[]
+  incomeSources           IncomeSource[]
+  contributionPlans       ContributionPlan[]
+  contributionAllocations ContributionAllocation[]
+  recurringSeries         RecurringSeries[]
+  savingsGoals            SavingsGoal[]
+  goalLedgerEntries       GoalLedgerEntry[]
+
+  @@unique([id, userId])
+  @@unique([connectionId, externalId])
+  @@index([userId])
+}
+
+model BalanceSnapshot {
+  id             String           @id @default(cuid())
+  userId         String
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  accountId      String
+  account        FinancialAccount @relation(fields: [accountId, userId], references: [id, userId], onDelete: NoAction, onUpdate: NoAction)
+  asOfDate       DateTime         @db.Date
+  balanceCents   Int // signed: balances owed (cards, loans) are negative
+  availableCents Int?
+  source         SnapshotSource
+  createdAt      DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime         @updatedAt @db.Timestamptz(3)
+
+  @@unique([accountId, asOfDate, source])
+  @@index([userId, asOfDate])
+}
+
+// =====================================================================================================================
+// Cash transactions
+
+model Transaction {
+  id                 String              @id @default(cuid())
+  userId             String
+  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  accountId          String
+  account            FinancialAccount    @relation(fields: [accountId, userId], references: [id, userId], onDelete: NoAction, onUpdate: NoAction)
+  date               DateTime            @db.Date
+  authorizedDate     DateTime?           @db.Date
+  amountCents        Int // signed, owner's net-worth view
+  description        String // raw text, never edited
+  merchantId         String?
+  merchant           Merchant?           @relation(fields: [merchantId, userId], references: [id, userId], onDelete: NoAction, onUpdate: NoAction)
+  kind               TxnKind
+  status             TxnStatus           @default(POSTED)
+  reviewStatus       ReviewStatus        @default(NEEDS_REVIEW)
+  categorySource     CategorySource      @default(NONE)
+  appliedRuleId      String?
+  appliedRule        CategorizationRule? @relation(fields: [appliedRuleId, userId], references: [id, userId], onDelete: NoAction, onUpdate: NoAction)
+  incomeSourceId     String?
+  incomeSource       IncomeSource?       @relation(fields: [incomeSourceId, userId], references: [id, userId], onDelete: NoAction, onUpdate: NoAction)
+  recurringSeriesId  String?
+  recurringSeries    RecurringSeries?    @relation(fields: [recurringSeriesId, userId], references: [id, userId], onDelete: NoAction, onUpdate: NoAction)
+  contributionPlanId String?
+  contributionPlan   ContributionPlan?   @relation(fields: [contributionPlanId, userId], references: [id, userId], onDelete: NoAction, onUpdate: NoAction)
+  excludeFromBudget  Boolean             @default(false)
+  notes              String?
+  transferPairId     String? // shared by both legs of a transfer, card payment or contribution
+  externalId         String?
+  pendingExternalId  String?
+  fingerprint        String
+  importBatchId      String?
+  importBatch        ImportBatch?        @relation(fields: [importBatchId, userId], references: [id, userId], onDelete: Cascade, onUpdate: NoAction)
+  raw                Json?
+  createdAt          DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime            @updatedAt @db.Timestamptz(3)
+
+  splits                       TransactionSplit[]
+  linkedInvestmentTransactions InvestmentTransaction[]
+
+  @@unique([id, userId])
+  @@unique([accountId, externalId])
+  @@index([userId, date])
+  @@index([userId, reviewStatus])
+  @@index([accountId, date])
+  @@index([accountId, fingerprint])
+  @@index([transferPairId])
+  @@index([recurringSeriesId])
+  @@index([contributionPlanId])
+  @@index([importBatchId])
+}
+
+/// Every transaction has at least one split, and its splits sum exactly to amountCents (deferred trigger).
+model TransactionSplit {
+  id            String      @id @default(cuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId, userId], references: [id, userId], onDelete: Cascade, onUpdate: NoAction)
+  categoryId    String? // null until categorized; always null for transfers, card payments and contributions
+  category      Category?   @relation(fields: [categoryId, userId], references: [id, userId], onDelete: NoAction, onUpdate: NoAction)
+  amountCents   Int
+  note          String?
+  createdAt     DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime    @updatedAt @db.Timestamptz(3)
+
+  @@index([transactionId])
+  @@index([userId, categoryId])
+}
+
+model Category {
+  id          String       @id @default(cuid())
+  userId      String
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  name        String
+  parentId    String?
+  parent      Category?    @relation("CategoryHierarchy", fields: [parentId, userId], references: [id, userId], onDelete: NoAction, onUpdate: NoAction)
+  children    Category[]   @relation("CategoryHierarchy")
+  type        CategoryType
+  isEssential Boolean      @default(false)
+  color       String?
+  sortOrder   Int          @default(0)
+  archivedAt  DateTime?    @db.Timestamptz(3)
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime     @updatedAt @db.Timestamptz(3)
+
+  splits              TransactionSplit[]
+  defaultForMerchants Merchant[]
+  rules               CategorizationRule[]
+  budgets             Budget[]
+  recurringSeries     RecurringSeries[]
+
+  // Name uniqueness per (user, parent), case-insensitive and NULLS NOT DISTINCT, is a SQL index in the migration.
+  @@unique([id, userId])
+  @@index([userId, parentId])
+}
+
+model Merchant {
+  id                String    @id @default(cuid())
+  userId            String
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  name              String
+  matchKey          String
+  defaultCategoryId String?
+  defaultCategory   Category? @relation(fields: [defaultCategoryId, userId], references: [id, userId], onDelete: NoAction, onUpdate: NoAction)
+  createdAt         DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime  @updatedAt @db.Timestamptz(3)
+
+  transactions    Transaction[]
+  rules           CategorizationRule[]
+  recurringSeries RecurringSeries[]
+
+  @@unique([id, userId])
+  @@unique([userId, matchKey])
+}
+
+/// Lowest priority number wins; ties go to the oldest rule.
+model CategorizationRule {
+  id             String            @id @default(cuid())
+  userId         String
+  user           User              @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  priority       Int
+  isActive       Boolean           @default(true)
+  field          RuleField
+  matchType      MatchType
+  pattern        String
+  accountId      String?
+  account        FinancialAccount? @relation(fields: [accountId, userId], references: [id, userId], onDelete: NoAction, onUpdate: NoAction)
+  minAmountCents Int?
+  maxAmountCents Int?
+  setCategoryId  String?
+  setCategory    Category?         @relation(fields: [setCategoryId, userId], references: [id, userId], onDelete: NoAction, onUpdate: NoAction)
+  setKind        TxnKind?
+  setMerchantId  String?
+  setMerchant    Merchant?         @relation(fields: [setMerchantId, userId], references: [id, userId], onDelete: NoAction, onUpdate: NoAction)
+  deletedAt      DateTime?         @db.Timestamptz(3)
+  createdAt      DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime          @updatedAt @db.Timestamptz(3)
+
+  transactions Transaction[]
+
+  @@unique([id, userId])
+  @@index([userId, priority])
+}
+
+model ImportBatch {
+  id             String           @id @default(cuid())
+  userId         String
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  accountId      String
+  account        FinancialAccount @relation(fields: [accountId, userId], references: [id, userId], onDelete: NoAction, onUpdate: NoAction)
+  source         ImportSource
+  adapterId      String
+  fileName       String?
+  fileSha256     String?
+  rowCount       Int              @default(0)
+  importedCount  Int              @default(0)
+  duplicateCount Int              @default(0)
+  errorCount     Int              @default(0)
+  status         ImportStatus     @default(PREVIEW)
+  createdAt      DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime         @updatedAt @db.Timestamptz(3)
+
+  transactions           Transaction[]
+  investmentTransactions InvestmentTransaction[]
+
+  @@unique([id, userId])
+  @@index([accountId])
+}
+
+model CsvImportProfile {
+  id               String           @id @default(cuid())
+  userId           String
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  name             String
+  institution      String?
+  columnMap        Json
+  dateFormat       String
+  amountConvention AmountConvention
+  hasHeader        Boolean          @default(true)
+  delimiter        String           @default(",")
+  createdAt        DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime         @updatedAt @db.Timestamptz(3)
+
+  @@unique([userId, name])
+}
+
+// =====================================================================================================================
+// Investments. Assets and prices are shared reference data (not user-owned).
+
+model Asset {
+  id            String     @id @default(cuid())
+  symbol        String
+  name          String
+  assetClass    AssetClass
+  quoteCurrency String     @default("USD")
+  externalIds   Json?
+  createdAt     DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime   @updatedAt @db.Timestamptz(3)
+
+  prices                    AssetPrice[]
+  investmentTransactions    InvestmentTransaction[] @relation("InvestmentTransactionAsset")
+  feeInvestmentTransactions InvestmentTransaction[] @relation("InvestmentTransactionFeeAsset")
+  holdingSnapshots          HoldingSnapshot[]
+
+  @@unique([assetClass, symbol])
+}
+
+model AssetPrice {
+  assetId   String
+  asset     Asset    @relation(fields: [assetId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  date      DateTime @db.Date
+  close     Decimal  @db.Decimal(24, 10)
+  source    String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@id([assetId, date, source])
+}
+
+model FxRate {
+  base      String
+  quote     String
+  date      DateTime @db.Date
+  rate      Decimal  @db.Decimal(24, 12)
+  source    String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@id([base, quote, date, source])
+}
+
+/// quantity is a positive magnitude; direction comes from type. cashAmountCents is the signed effect on the account's
+/// USD cash (BUY negative, SELL positive). usdValueCents is the leg's fair value when there is no USD cash leg.
+model InvestmentTransaction {
+  id                      String           @id @default(cuid())
+  userId                  String
+  user                    User             @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  accountId               String
+  account                 FinancialAccount @relation(fields: [accountId, userId], references: [id, userId], onDelete: NoAction, onUpdate: NoAction)
+  assetId                 String?
+  asset                   Asset?           @relation("InvestmentTransactionAsset", fields: [assetId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tradeDate               DateTime         @db.Date
+  settleDate              DateTime?        @db.Date
+  type                    InvTxnType
+  quantity                Decimal?         @db.Decimal(38, 18)
+  unitPrice               Decimal?         @db.Decimal(24, 10)
+  cashAmountCents         Int              @default(0)
+  usdValueCents           Int?
+  usdValueSource          ValuationSource?
+  feeCents                Int              @default(0)
+  feeAssetId              String?
+  feeAsset                Asset?           @relation("InvestmentTransactionFeeAsset", fields: [feeAssetId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  feeQuantity             Decimal?         @db.Decimal(38, 18)
+  groupRef                String?
+  linkedCashTransactionId String?
+  linkedCashTransaction   Transaction?     @relation(fields: [linkedCashTransactionId, userId], references: [id, userId], onDelete: NoAction, onUpdate: NoAction)
+  contributionTaxYear     Int?
+  externalId              String?
+  fingerprint             String
+  importBatchId           String?
+  importBatch             ImportBatch?     @relation(fields: [importBatchId, userId], references: [id, userId], onDelete: Cascade, onUpdate: NoAction)
+  raw                     Json?
+  createdAt               DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt               DateTime         @updatedAt @db.Timestamptz(3)
+
+  @@unique([accountId, externalId])
+  @@index([accountId, tradeDate])
+  @@index([userId, assetId])
+  @@index([groupRef])
+  @@index([linkedCashTransactionId])
+}
+
+model HoldingSnapshot {
+  id               String           @id @default(cuid())
+  userId           String
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  accountId        String
+  account          FinancialAccount @relation(fields: [accountId, userId], references: [id, userId], onDelete: NoAction, onUpdate: NoAction)
+  assetId          String
+  asset            Asset            @relation(fields: [assetId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  asOfDate         DateTime         @db.Date
+  quantity         Decimal          @db.Decimal(38, 18)
+  costBasisCents   Int?
+  priceUsed        Decimal?         @db.Decimal(24, 10)
+  marketValueCents Int?
+  source           SnapshotSource
+  createdAt        DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime         @updatedAt @db.Timestamptz(3)
+
+  @@unique([accountId, assetId, asOfDate, source])
+  @@index([userId, asOfDate])
+}
+
+/// Total value of an investment account at a date. Never interpolated: missing dates are gaps.
+model PortfolioValuation {
+  id               String           @id @default(cuid())
+  userId           String
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  accountId        String
+  account          FinancialAccount @relation(fields: [accountId, userId], references: [id, userId], onDelete: NoAction, onUpdate: NoAction)
+  asOfDate         DateTime         @db.Date
+  marketValueCents Int
+  cashCents        Int
+  source           SnapshotSource
+  createdAt        DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime         @updatedAt @db.Timestamptz(3)
+
+  @@unique([accountId, asOfDate, source])
+  @@index([userId, asOfDate])
+}
+
+// =====================================================================================================================
+// Income and contributions. Schedules are JSON validated by src/lib/schedules.ts (ADR-0006).
+
+model IncomeSource {
+  id                 String           @id @default(cuid())
+  userId             String
+  user               User             @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  name               String
+  type               IncomeType
+  schedule           Json? // null = irregular
+  depositAccountId   String
+  depositAccount     FinancialAccount @relation(fields: [depositAccountId, userId], references: [id, userId], onDelete: NoAction, onUpdate: NoAction)
+  matchPattern       String?
+  hourlyRateCents    Int?
+  typicalWeeklyHours Decimal?         @db.Decimal(6, 2)
+  takeHomeRatio      Decimal?         @db.Decimal(7, 6)
+  deletedAt          DateTime?        @db.Timestamptz(3)
+  createdAt          DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime         @updatedAt @db.Timestamptz(3)
+
+  transactions      Transaction[]
+  contributionPlans ContributionPlan[]
+
+  @@unique([id, userId])
+}
+
+/// Planned targets are computed by src/lib/contributions.ts, never stored.
+model ContributionPlan {
+  id               String               @id @default(cuid())
+  userId           String
+  user             User                 @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  name             String
+  sourceAccountId  String
+  sourceAccount    FinancialAccount     @relation(fields: [sourceAccountId, userId], references: [id, userId], onDelete: NoAction, onUpdate: NoAction)
+  ruleType         ContributionRuleType
+  fixedAmountCents Int?
+  percent          Decimal?             @db.Decimal(7, 6)
+  minimumCents     Int?
+  incomeSourceId   String?
+  incomeSource     IncomeSource?        @relation(fields: [incomeSourceId, userId], references: [id, userId], onDelete: NoAction, onUpdate: NoAction)
+  schedule         Json?
+  status           PlanStatus           @default(ACTIVE)
+  effectiveFrom    DateTime             @db.Date
+  effectiveTo      DateTime?            @db.Date
+  deletedAt        DateTime?            @db.Timestamptz(3)
+  createdAt        DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime             @updatedAt @db.Timestamptz(3)
+
+  allocations  ContributionAllocation[]
+  overrides    ContributionOverride[]
+  transactions Transaction[]
+
+  @@unique([id, userId])
+  @@index([userId, status])
+}
+
+model ContributionAllocation {
+  id              String           @id @default(cuid())
+  userId          String
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  planId          String
+  plan            ContributionPlan @relation(fields: [planId, userId], references: [id, userId], onDelete: Cascade, onUpdate: NoAction)
+  targetAccountId String
+  targetAccount   FinancialAccount @relation(fields: [targetAccountId, userId], references: [id, userId], onDelete: NoAction, onUpdate: NoAction)
+  share           Decimal          @db.Decimal(7, 6)
+  createdAt       DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime         @updatedAt @db.Timestamptz(3)
+
+  @@unique([planId, targetAccountId])
+}
+
+model ContributionOverride {
+  id            String           @id @default(cuid())
+  userId        String
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  planId        String
+  plan          ContributionPlan @relation(fields: [planId, userId], references: [id, userId], onDelete: Cascade, onUpdate: NoAction)
+  scheduledDate DateTime         @db.Date
+  amountCents   Int?
+  skip          Boolean          @default(false)
+  note          String?
+  createdAt     DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime         @updatedAt @db.Timestamptz(3)
+
+  @@unique([planId, scheduledDate])
+}
+
+// =====================================================================================================================
+// Budgets, recurring items, goals, forecasts, net worth, dashboard
+
+/// month is the first day of a calendar month. A category may be budgeted only if no ancestor or descendant is
+/// budgeted in the same month (enforced in the service layer).
+model Budget {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  month       DateTime @db.Date
+  categoryId  String
+  category    Category @relation(fields: [categoryId, userId], references: [id, userId], onDelete: NoAction, onUpdate: NoAction)
+  amountCents Int
+  rollover    Boolean  @default(false)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+
+  @@unique([userId, month, categoryId])
+}
+
+model RecurringSeries {
+  id                  String           @id @default(cuid())
+  userId              String
+  user                User             @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  name                String
+  merchantId          String?
+  merchant            Merchant?        @relation(fields: [merchantId, userId], references: [id, userId], onDelete: NoAction, onUpdate: NoAction)
+  accountId           String
+  account             FinancialAccount @relation(fields: [accountId, userId], references: [id, userId], onDelete: NoAction, onUpdate: NoAction)
+  categoryId          String?
+  category            Category?        @relation(fields: [categoryId, userId], references: [id, userId], onDelete: NoAction, onUpdate: NoAction)
+  kind                TxnKind
+  expectedAmountCents Int // signed like transactions
+  toleranceCents      Int              @default(0)
+  schedule            Json
+  nextExpectedDate    DateTime?        @db.Date
+  status              RecurringStatus  @default(SUGGESTED)
+  deletedAt           DateTime?        @db.Timestamptz(3)
+  createdAt           DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime         @updatedAt @db.Timestamptz(3)
+
+  transactions Transaction[]
+
+  @@unique([id, userId])
+  @@index([userId, status])
+}
+
+model SavingsGoal {
+  id                 String            @id @default(cuid())
+  userId             String
+  user               User              @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  name               String
+  targetCents        Int
+  targetDate         DateTime?         @db.Date
+  linkedAccountId    String?
+  linkedAccount      FinancialAccount? @relation(fields: [linkedAccountId, userId], references: [id, userId], onDelete: NoAction, onUpdate: NoAction)
+  monthlyTargetCents Int?
+  priority           Int               @default(0)
+  status             GoalStatus        @default(ACTIVE)
+  deletedAt          DateTime?         @db.Timestamptz(3)
+  createdAt          DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime          @updatedAt @db.Timestamptz(3)
+
+  entries GoalLedgerEntry[]
+
+  @@unique([id, userId])
+}
+
+/// ALLOCATE entries are positive; RELEASE and WITHDRAW entries are negative.
+model GoalLedgerEntry {
+  id          String           @id @default(cuid())
+  userId      String
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  goalId      String
+  goal        SavingsGoal      @relation(fields: [goalId, userId], references: [id, userId], onDelete: NoAction, onUpdate: NoAction)
+  accountId   String
+  account     FinancialAccount @relation(fields: [accountId, userId], references: [id, userId], onDelete: NoAction, onUpdate: NoAction)
+  date        DateTime         @db.Date
+  amountCents Int
+  type        GoalEntryType
+  note        String?
+  createdAt   DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime         @updatedAt @db.Timestamptz(3)
+
+  @@index([goalId])
+  @@index([accountId])
+}
+
+model ForecastScenario {
+  id                          String           @id @default(cuid())
+  userId                      String
+  user                        User             @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  name                        String
+  baseline                    ForecastBaseline
+  lookbackMonths              Int              @default(6)
+  contributionPercentOverride Decimal?         @db.Decimal(7, 6)
+  categoryAdjustments         Json             @default("[]")
+  marketGrowthAnnual          Decimal?         @db.Decimal(7, 6) // null = no growth assumed
+  includeGoals                Boolean          @default(true)
+  createdAt                   DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt                   DateTime         @updatedAt @db.Timestamptz(3)
+
+  @@unique([userId, name])
+}
+
+/// Derived cache, rebuildable from balance snapshots and portfolio valuations.
+model NetWorthSnapshot {
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  asOfDate         DateTime @db.Date
+  assetsCents      Int
+  liabilitiesCents Int // <= 0 by the sign convention
+  cashCents        Int
+  investmentsCents Int
+  otherAssetsCents Int
+  completeness     Json // accounts with no data for this date
+  createdAt        DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime @updatedAt @db.Timestamptz(3)
+
+  @@id([userId, asOfDate])
+}
+
+/// Saved dashboard layout per breakpoint. No row = the code-defined default layout (ADR-0005).
+model DashboardLayout {
+  id         String           @id @default(cuid())
+  userId     String
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  breakpoint LayoutBreakpoint
+  version    Int              @default(1)
+  widgets    Json
+  createdAt  DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime         @updatedAt @db.Timestamptz(3)
+
+  @@unique([userId, breakpoint])
+}
