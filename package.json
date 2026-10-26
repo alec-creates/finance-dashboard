@@ -18,13 +18,27 @@
     "test:coverage": "vitest run --coverage",
     "check": "npm run format:check && npm run lint && npm run typecheck && npm test",
     "db:check-env": "node scripts/check-db-env.mjs",
-    "db:check-connection": "node scripts/check-db-env.mjs --connect"
+    "db:check-connection": "node scripts/check-db-env.mjs --connect",
+    "db:generate": "prisma generate",
+    "db:migrate": "tsx scripts/db.ts development migrate dev",
+    "db:migrate:create": "tsx scripts/db.ts development migrate dev --create-only",
+    "db:migrate:test": "tsx scripts/db.ts test migrate deploy",
+    "db:status": "tsx scripts/db.ts development migrate status",
+    "db:status:test": "tsx scripts/db.ts test migrate status",
+    "db:seed": "tsx scripts/db.ts development db seed",
+    "test:integration": "vitest run --config vitest.integration.config.mts",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
+    "@next/env": "16.4.3",
+    "@prisma/adapter-pg": "7.10.1",
+    "@prisma/client": "7.10.1",
     "decimal.js": "^10.6.0",
     "next": "16.4.3",
+    "pg": "8.23.1",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",
@@ -35,10 +49,11 @@
     "eslint": "^9",
     "eslint-config-next": "16.4.3",
     "eslint-config-prettier": "^10.1.8",
-    "pg": "^8.23.1",
     "prettier": "^3.9.10",
     "prettier-plugin-tailwindcss": "^0.8.1",
+    "prisma": "7.10.1",
     "tailwindcss": "^4",
+    "tsx": "4.23.15",
     "typescript": "^5",
     "vitest": "^5.0.5"
   }
