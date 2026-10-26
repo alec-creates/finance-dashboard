@@ -2,6 +2,9 @@
 
 import { useState, type FormEvent } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { authClient } from "@/lib/auth-client";
 import { describeAuthError } from "@/lib/auth-messages";
 import { navigateWithFullReload } from "@/lib/navigation";
@@ -10,7 +13,7 @@ import {
   TWO_FACTOR_SETUP_PATH,
 } from "@/server/auth/constants";
 
-import { buttonClass, FormError, inputClass, labelClass } from "./auth-card";
+import { FormError } from "./auth-card";
 
 /** One-time creation of the owner account. The server accepts only the configured owner email. */
 export function SetupForm() {
@@ -42,66 +45,53 @@ export function SetupForm() {
 
   return (
     <form onSubmit={onSubmit} className="space-y-4" noValidate>
-      <div>
-        <label htmlFor="name" className={labelClass}>
-          Name
-        </label>
-        <input
-          id="name"
-          name="name"
-          autoComplete="name"
-          className={inputClass}
-        />
+      <div className="space-y-2">
+        <Label htmlFor="name">Name</Label>
+        <Input id="name" name="name" autoComplete="name" className="h-10" />
       </div>
-      <div>
-        <label htmlFor="email" className={labelClass}>
-          Owner email
-        </label>
-        <input
+      <div className="space-y-2">
+        <Label htmlFor="email">Owner email</Label>
+        <Input
           id="email"
           name="email"
           type="email"
           autoComplete="email"
           required
-          className={inputClass}
+          className="h-10"
         />
       </div>
-      <div>
-        <label htmlFor="password" className={labelClass}>
-          Password
-        </label>
-        <input
+      <div className="space-y-2">
+        <Label htmlFor="password">Password</Label>
+        <Input
           id="password"
           name="password"
           type="password"
           autoComplete="new-password"
           minLength={MIN_PASSWORD_LENGTH}
           required
-          className={inputClass}
+          className="h-10"
           aria-describedby="password-hint"
         />
-        <p id="password-hint" className="mt-1 text-xs text-zinc-500">
+        <p id="password-hint" className="text-xs text-muted-foreground">
           At least {MIN_PASSWORD_LENGTH} characters. A passphrase from a
           password manager works well.
         </p>
       </div>
-      <div>
-        <label htmlFor="confirmPassword" className={labelClass}>
-          Confirm password
-        </label>
-        <input
+      <div className="space-y-2">
+        <Label htmlFor="confirmPassword">Confirm password</Label>
+        <Input
           id="confirmPassword"
           name="confirmPassword"
           type="password"
           autoComplete="new-password"
           required
-          className={inputClass}
+          className="h-10"
         />
       </div>
       <FormError message={error} />
-      <button type="submit" disabled={pending} className={buttonClass}>
+      <Button type="submit" disabled={pending} className="h-10 w-full">
         {pending ? "Creating account…" : "Create owner account"}
-      </button>
+      </Button>
     </form>
   );
 }

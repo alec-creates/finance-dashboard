@@ -1,21 +1,46 @@
+import { ChevronLeftIcon } from "lucide-react";
+import type { Metadata } from "next";
 import { headers } from "next/headers";
+import Link from "next/link";
 import { Suspense } from "react";
 
+import { PageHeader } from "@/components/app-shell/page-header";
 import { RevokeOtherSessionsButton } from "@/components/auth/revoke-other-sessions-button";
 import { SignOutButton } from "@/components/auth/sign-out-button";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { getAuth } from "@/server/auth";
 import { requireUser } from "@/server/auth/session";
 
+export const metadata: Metadata = { title: "Security" };
+
 export default function SecurityPage() {
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-semibold tracking-tight">Security</h1>
-      <Suspense
-        fallback={<p className="text-sm text-zinc-500">Loading sessions…</p>}
+    <>
+      <Button
+        variant="ghost"
+        size="sm"
+        asChild
+        className="mb-2 -ml-2 text-muted-foreground"
       >
+        <Link href="/settings">
+          <ChevronLeftIcon aria-hidden />
+          Settings
+        </Link>
+      </Button>
+      <PageHeader title="Security" />
+      <Suspense fallback={<Skeleton className="h-80 w-full max-w-2xl" />}>
         <SecurityOverview />
       </Suspense>
-    </div>
+    </>
   );
 }
 
@@ -68,48 +93,60 @@ async function SecurityOverview() {
     );
 
   return (
-    <div className="space-y-8">
-      <section className="space-y-2">
-        <h2 className="text-lg font-semibold">Two-factor authentication</h2>
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">
-          {user.twoFactorEnabled
-            ? "On. Sign-in requires a code from your authenticator app or a backup code."
-            : "Off."}
-        </p>
-      </section>
+    <div className="max-w-2xl space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Two-factor authentication</CardTitle>
+          <CardDescription>
+            {user.twoFactorEnabled
+              ? "On. Sign-in requires a code from your authenticator app or a backup code."
+              : "Off."}
+          </CardDescription>
+        </CardHeader>
+      </Card>
 
-      <section className="space-y-3">
-        <h2 className="text-lg font-semibold">Signed-in devices</h2>
-        <ul className="divide-y divide-zinc-200 rounded-lg border border-zinc-200 text-sm dark:divide-zinc-800 dark:border-zinc-800">
-          {rows.map((row) => (
-            <li
-              key={row.id}
-              className="flex items-center justify-between px-4 py-3"
-            >
-              <span>
-                {row.device}
-                {row.isCurrent ? (
-                  <span className="ml-2 rounded bg-zinc-100 px-1.5 py-0.5 text-xs dark:bg-zinc-800">
-                    This device
-                  </span>
-                ) : null}
-              </span>
-              <span className="text-zinc-500">
-                Signed in{" "}
-                {row.createdAt.toLocaleDateString("en-US", {
-                  dateStyle: "medium",
-                })}
-              </span>
-            </li>
-          ))}
-        </ul>
-        <RevokeOtherSessionsButton disabled={rows.length <= 1} />
-      </section>
+      <Card>
+        <CardHeader>
+          <CardTitle>Signed-in devices</CardTitle>
+          <CardDescription>
+            Sessions last 7 days and end at once when you sign out.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <ul className="divide-y rounded-lg border text-sm">
+            {rows.map((row) => (
+              <li
+                key={row.id}
+                className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-3 py-2.5"
+              >
+                <span className="flex items-center gap-2 font-medium">
+                  {row.device}
+                  {row.isCurrent ? (
+                    <Badge variant="secondary">This device</Badge>
+                  ) : null}
+                </span>
+                <span className="text-muted-foreground">
+                  Signed in{" "}
+                  {row.createdAt.toLocaleDateString("en-US", {
+                    dateStyle: "medium",
+                  })}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <RevokeOtherSessionsButton disabled={rows.length <= 1} />
+        </CardContent>
+      </Card>
 
-      <section className="space-y-2">
-        <h2 className="text-lg font-semibold">Sign out</h2>
-        <SignOutButton className="rounded-md border border-zinc-300 px-3 py-2 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900" />
-      </section>
+      <Card>
+        <CardHeader>
+          <CardTitle>Sign out</CardTitle>
+          <CardDescription>Ends the session on this device.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <SignOutButton />
+        </CardContent>
+      </Card>
     </div>
   );
 }

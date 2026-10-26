@@ -3,11 +3,14 @@
 import QRCode from "qrcode";
 import { useState, type FormEvent } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { authClient } from "@/lib/auth-client";
 import { describeAuthError } from "@/lib/auth-messages";
 import { navigateWithFullReload } from "@/lib/navigation";
 
-import { buttonClass, FormError, inputClass, labelClass } from "./auth-card";
+import { FormError } from "./auth-card";
 
 interface Enrollment {
   qrDataUrl: string;
@@ -90,23 +93,21 @@ export function TwoFactorSetup() {
   if (!enrollment) {
     return (
       <form onSubmit={start} className="space-y-4" noValidate>
-        <div>
-          <label htmlFor="password" className={labelClass}>
-            Confirm your password
-          </label>
-          <input
+        <div className="space-y-2">
+          <Label htmlFor="password">Confirm your password</Label>
+          <Input
             id="password"
             name="password"
             type="password"
             autoComplete="current-password"
             required
-            className={inputClass}
+            className="h-10"
           />
         </div>
         <FormError message={error} />
-        <button type="submit" disabled={pending} className={buttonClass}>
+        <Button type="submit" disabled={pending} className="h-10 w-full">
           {pending ? "Preparing…" : "Continue"}
-        </button>
+        </Button>
       </form>
     );
   }
@@ -123,11 +124,11 @@ export function TwoFactorSetup() {
           alt="QR code for your authenticator app"
           width={220}
           height={220}
-          className="rounded-md bg-white p-2"
+          className="rounded-lg bg-white p-2 ring-1 ring-foreground/10"
         />
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+        <p className="text-sm text-muted-foreground">
           Can&apos;t scan? Enter this key manually:
-          <code className="mt-1 block rounded bg-zinc-100 px-2 py-1 font-mono text-xs break-all dark:bg-zinc-900">
+          <code className="mt-1 block rounded-md bg-muted px-2 py-1 font-mono text-xs break-all text-foreground">
             {enrollment.manualKey}
           </code>
         </p>
@@ -135,58 +136,56 @@ export function TwoFactorSetup() {
 
       <section className="space-y-3">
         <h2 className="text-sm font-semibold">2. Save your backup codes</h2>
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+        <p className="text-sm text-muted-foreground">
           Each code signs you in once if you lose your phone. They won&apos;t be
           shown again. Store them in a password manager.
         </p>
-        <ul className="grid grid-cols-2 gap-1 rounded-md bg-zinc-100 p-3 font-mono text-sm dark:bg-zinc-900">
+        <ul className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-3 font-mono text-sm">
           {enrollment.backupCodes.map((code) => (
             <li key={code}>{code}</li>
           ))}
         </ul>
-        <button
+        <Button
           type="button"
+          variant="outline"
           onClick={() => downloadBackupCodes(enrollment.backupCodes)}
-          className="text-sm text-zinc-700 underline underline-offset-4 dark:text-zinc-300"
         >
           Download as a text file
-        </button>
+        </Button>
         <label className="flex items-center gap-2 text-sm">
           <input
             type="checkbox"
             checked={savedCodes}
             onChange={(event) => setSavedCodes(event.target.checked)}
+            className="size-4 accent-primary"
           />
           I&apos;ve saved my backup codes
         </label>
       </section>
 
       <form onSubmit={confirm} className="space-y-4" noValidate>
-        <h2 className="text-sm font-semibold">
-          3. Enter the 6-digit code from the app
-        </h2>
-        <div>
-          <label htmlFor="code" className="sr-only">
-            Code
-          </label>
-          <input
+        <div className="space-y-2">
+          <Label htmlFor="code" className="text-sm font-semibold">
+            3. Enter the 6-digit code from the app
+          </Label>
+          <Input
             id="code"
             name="code"
             inputMode="numeric"
             autoComplete="one-time-code"
             maxLength={6}
             required
-            className={inputClass}
+            className="h-10 font-mono tracking-[0.3em]"
           />
         </div>
         <FormError message={error} />
-        <button
+        <Button
           type="submit"
           disabled={pending || !savedCodes}
-          className={buttonClass}
+          className="h-10 w-full"
         >
           {pending ? "Checking…" : "Turn on two-factor authentication"}
-        </button>
+        </Button>
       </form>
     </div>
   );

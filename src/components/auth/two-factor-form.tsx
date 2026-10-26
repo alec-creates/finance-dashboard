@@ -2,11 +2,14 @@
 
 import { useState, type FormEvent } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { authClient } from "@/lib/auth-client";
 import { describeAuthError } from "@/lib/auth-messages";
 import { navigateWithFullReload } from "@/lib/navigation";
 
-import { buttonClass, FormError, inputClass, labelClass } from "./auth-card";
+import { FormError } from "./auth-card";
 
 /** Second step of sign-in: a code from the authenticator app, or a one-time backup code. */
 export function TwoFactorForm() {
@@ -34,13 +37,13 @@ export function TwoFactorForm() {
 
   return (
     <form onSubmit={onSubmit} className="space-y-4" noValidate>
-      <div>
-        <label htmlFor="code" className={labelClass}>
+      <div className="space-y-2">
+        <Label htmlFor="code">
           {useBackupCode
             ? "Backup code"
             : "6-digit code from your authenticator app"}
-        </label>
-        <input
+        </Label>
+        <Input
           id="code"
           name="code"
           key={useBackupCode ? "backup" : "totp"}
@@ -50,25 +53,26 @@ export function TwoFactorForm() {
           maxLength={useBackupCode ? 32 : 6}
           required
           autoFocus
-          className={inputClass}
+          className={useBackupCode ? "h-10" : "h-10 font-mono tracking-[0.3em]"}
         />
       </div>
       <FormError message={error} />
-      <button type="submit" disabled={pending} className={buttonClass}>
+      <Button type="submit" disabled={pending} className="h-10 w-full">
         {pending ? "Checking…" : "Verify"}
-      </button>
-      <button
+      </Button>
+      <Button
         type="button"
+        variant="link"
         onClick={() => {
           setUseBackupCode((value) => !value);
           setError("");
         }}
-        className="w-full text-sm text-zinc-600 underline underline-offset-4 dark:text-zinc-400"
+        className="w-full text-muted-foreground"
       >
         {useBackupCode
           ? "Use the authenticator app instead"
           : "Use a backup code instead"}
-      </button>
+      </Button>
     </form>
   );
 }

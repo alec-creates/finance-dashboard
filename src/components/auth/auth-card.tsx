@@ -1,45 +1,75 @@
+import { CircleAlertIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { Brand } from "@/components/app-shell/brand";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+
+/** Full-page frame for sign-in, two-factor and setup: brand, theme toggle and a centered card. */
 export function AuthCard({
   title,
   description,
   children,
+  wide = false,
 }: {
   title: string;
   description?: string;
   children: ReactNode;
+  /** Wider card for the 2FA setup steps. */
+  wide?: boolean;
 }) {
   return (
-    <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-4 py-12">
-      <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
-        <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
-        {description ? (
-          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-            {description}
-          </p>
-        ) : null}
-        <div className="mt-6">{children}</div>
-      </div>
-    </main>
+    <div className="flex min-h-dvh flex-1 flex-col bg-muted/40">
+      <header className="flex items-center justify-between px-4 py-3 sm:px-6">
+        <Brand asLink={false} />
+        <ThemeToggle />
+      </header>
+      <main className="flex flex-1 items-start justify-center px-4 pt-6 pb-12 sm:items-center sm:pt-0">
+        <Card className={wide ? "w-full max-w-lg" : "w-full max-w-sm"}>
+          <CardHeader>
+            <CardTitle className="text-lg">
+              <h1>{title}</h1>
+            </CardTitle>
+            {description ? (
+              <CardDescription>{description}</CardDescription>
+            ) : null}
+          </CardHeader>
+          <CardContent>{children}</CardContent>
+        </Card>
+      </main>
+    </div>
   );
 }
-
-export const inputClass =
-  "mt-1 block w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200 dark:border-zinc-700 dark:bg-zinc-900 dark:focus:ring-zinc-800";
-export const buttonClass =
-  "inline-flex w-full items-center justify-center rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200";
-export const labelClass = "block text-sm font-medium";
 
 export function FormError({ message }: { message: string }) {
   if (!message) {
     return null;
   }
   return (
-    <p
-      role="alert"
-      className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300"
+    <Alert variant="destructive">
+      <CircleAlertIcon aria-hidden />
+      <AlertDescription>{message}</AlertDescription>
+    </Alert>
+  );
+}
+
+/** Loading state for auth pages that check the database first. */
+export function AuthPageSkeleton() {
+  return (
+    <div
+      className="flex min-h-dvh flex-1 items-center justify-center bg-muted/40 px-4"
+      aria-busy="true"
+      aria-label="Loading"
     >
-      {message}
-    </p>
+      <Skeleton className="h-72 w-full max-w-sm rounded-xl" />
+    </div>
   );
 }

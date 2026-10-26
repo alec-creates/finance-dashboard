@@ -3,16 +3,17 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
 
-import { AuthCard } from "@/components/auth/auth-card";
+import { AuthCard, AuthPageSkeleton } from "@/components/auth/auth-card";
 import { SetupForm } from "@/components/auth/setup-form";
+import { Button } from "@/components/ui/button";
 import { ownerAccountExists } from "@/server/auth/config";
 import { getPrisma } from "@/server/db/client";
 
-export const metadata: Metadata = { title: "Set up · Finance Dashboard" };
+export const metadata: Metadata = { title: "Set up" };
 
 export default function SetupPage() {
   return (
-    <Suspense fallback={<p className="p-6 text-sm text-zinc-500">Loading…</p>}>
+    <Suspense fallback={<AuthPageSkeleton />}>
       <SetupGate />
     </Suspense>
   );
@@ -24,12 +25,9 @@ async function SetupGate() {
   if (ownerExists) {
     return (
       <AuthCard title="Setup is complete">
-        <Link
-          href="/sign-in"
-          className="text-sm font-medium underline underline-offset-4"
-        >
-          Go to sign in
-        </Link>
+        <Button asChild className="h-10 w-full">
+          <Link href="/sign-in">Go to sign in</Link>
+        </Button>
       </AuthCard>
     );
   }

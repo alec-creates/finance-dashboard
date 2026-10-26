@@ -4,7 +4,7 @@ import { AuthCard } from "@/components/auth/auth-card";
 import { TwoFactorForm } from "@/components/auth/two-factor-form";
 
 export const metadata: Metadata = {
-  title: "Two-factor verification · Finance Dashboard",
+  title: "Two-factor verification",
 };
 
 export default function TwoFactorPage() {

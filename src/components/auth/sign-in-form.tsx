@@ -2,11 +2,14 @@
 
 import { useState, type FormEvent } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { authClient } from "@/lib/auth-client";
 import { describeAuthError } from "@/lib/auth-messages";
 import { navigateWithFullReload } from "@/lib/navigation";
 
-import { buttonClass, FormError, inputClass, labelClass } from "./auth-card";
+import { FormError } from "./auth-card";
 
 export function SignInForm() {
   const [error, setError] = useState("");
@@ -36,36 +39,32 @@ export function SignInForm() {
 
   return (
     <form onSubmit={onSubmit} className="space-y-4" noValidate>
-      <div>
-        <label htmlFor="email" className={labelClass}>
-          Email
-        </label>
-        <input
+      <div className="space-y-2">
+        <Label htmlFor="email">Email</Label>
+        <Input
           id="email"
           name="email"
           type="email"
           autoComplete="email"
           required
-          className={inputClass}
+          className="h-10"
         />
       </div>
-      <div>
-        <label htmlFor="password" className={labelClass}>
-          Password
-        </label>
-        <input
+      <div className="space-y-2">
+        <Label htmlFor="password">Password</Label>
+        <Input
           id="password"
           name="password"
           type="password"
           autoComplete="current-password"
           required
-          className={inputClass}
+          className="h-10"
         />
       </div>
       <FormError message={error} />
-      <button type="submit" disabled={pending} className={buttonClass}>
+      <Button type="submit" disabled={pending} className="h-10 w-full">
         {pending ? "Signing in…" : "Sign in"}
-      </button>
+      </Button>
     </form>
   );
 }
