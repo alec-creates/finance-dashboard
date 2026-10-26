@@ -217,20 +217,22 @@ enum CostBasisMethod {
 }
 
 // =====================================================================================================================
-// Authentication: Better Auth core schema (user, session, account, verification). Plugin tables (two-factor,
-// passkeys) are added in Phase 1 Task 4 with the Better Auth CLI. "Account" here is a sign-in method, not a
-// financial account.
+// Authentication: Better Auth 1.7 tables (user, session, account, verification) plus the two-factor plugin
+// (twoFactor, user.twoFactorEnabled) and database-backed rate limiting (rateLimit), matching the shapes Better Auth
+// declares for those features. "Account" here is a sign-in method, not a financial account (ADR-0010).
 
 model User {
-  id            String    @id @default(cuid())
-  name          String
-  email         String    @unique
-  emailVerified Boolean   @default(false)
-  image         String?
-  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt     DateTime  @updatedAt @db.Timestamptz(3)
-  sessions      Session[]
-  accounts      Account[]
+  id               String      @id @default(cuid())
+  name             String
+  email            String      @unique
+  emailVerified    Boolean     @default(false)
+  image            String?
+  twoFactorEnabled Boolean     @default(false)
+  createdAt        DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime    @updatedAt @db.Timestamptz(3)
+  sessions         Session[]
+  accounts         Account[]
+  twoFactors       TwoFactor[]
 
   settings                UserSettings?
   safeToSpendSettings     SafeToSpendSettings?
@@ -302,6 +304,31 @@ model Verification {
   updatedAt  DateTime @updatedAt @db.Timestamptz(3)
 
   @@index([identifier])
+}
+
+/// TOTP secret and backup codes, encrypted by Better Auth with BETTER_AUTH_SECRET. Never returned or logged.
+model TwoFactor {
+  id                      String    @id @default(cuid())
+  secret                  String
+  backupCodes             String
+  userId                  String
+  user                    User      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  verified                Boolean   @default(true)
+  failedVerificationCount Int       @default(0)
+  lockedUntil             DateTime? @db.Timestamptz(3)
+
+  @@index([secret])
+  @@index([userId])
+}
+
+/// Rate-limit buckets shared by all server instances (one row per client IP and path).
+model RateLimit {
+  id          String @id @default(cuid())
+  key         String @unique
+  count       Int
+  /// Milliseconds since the epoch. Float (exact below 2^53) because Better Auth subtracts it from Date.now() as a
+  /// number, and Prisma returns BigInt columns as JavaScript bigint.
+  lastRequest Float
 }
 
 // =====================================================================================================================
