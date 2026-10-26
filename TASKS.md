@@ -18,8 +18,8 @@ and a polished default dashboard built from reusable widgets, deployed with synt
 - [ ] **3. Database**
   - [x] Design review: 11 fixes applied to `docs/data-model.md` (ADR-0009); isolated environments (ADR-0008)
   - [x] Local env files with placeholders (gitignored) and `npm run db:check-env`
-  - [ ] Owner creates Neon projects `finance-dashboard-dev` and `finance-dashboard-test` and fills in the env files;
-        `npm run db:check-env` passes
+  - [x] Owner creates Neon projects `finance-dashboard-dev` and `finance-dashboard-test` and fills in the env files;
+        `npm run db:check-env` and `npm run db:check-connection` pass (2026-10-26)
   - [ ] Prisma 7.10.1 (pinned), `prisma.config.ts`, full schema from `docs/data-model.md` with composite ownership
         relations, SQL constraints, first migration on dev and test
   - [ ] Env validation (Zod) and test-database guard (`DATABASE_ENV=test`, host differs from development)

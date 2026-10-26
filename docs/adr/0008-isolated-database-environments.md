@@ -22,7 +22,8 @@ let one environment reach another. The Neon Free plan allows 100 projects, each 
   (`development` / `test` / `production`).
 - Database tests and any reset helper refuse to run unless `DATABASE_ENV` is `test` and the database host differs from
   the development host.
-- `npm run db:check-env` validates both files without printing any value.
+- `npm run db:check-env` validates both files without printing any value; `npm run db:check-connection` also signs
+  in to each database inside a rolled-back READ ONLY transaction and confirms the servers are different projects.
 - Prisma is pinned to the stable 7.x line (7.10.1 at the time of writing); npm's `latest` tag currently points at an
   8.0 release candidate.
 

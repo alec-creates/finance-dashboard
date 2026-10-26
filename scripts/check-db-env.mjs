@@ -3,7 +3,12 @@
  * Checks the local database configuration (.env.local and .env.test.local) WITHOUT printing any value.
  * Every line of output is a pass/fail statement; connection strings, hosts, users and passwords are never shown.
  *
- * Usage: npm run db:check-env
+ * Usage:
+ *   npm run db:check-env          file checks only (offline)
+ *   npm run db:check-connection   file checks, then a read-only sign-in to each database
+ *
+ * The sign-in runs inside a READ ONLY transaction that is rolled back, so it cannot create or change anything.
+ * Driver errors are reduced to an error code, because their messages can contain hosts or role names.
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
@@ -140,6 +145,12 @@ for (const { file, expectedEnv, project } of ENVIRONMENTS) {
       file,
       endpoint: endpointOf(direct.host),
       password: direct.password,
+      database: direct.database,
+      user: direct.user,
+      urls: {
+        DATABASE_URL: values.DATABASE_URL,
+        DIRECT_URL: values.DIRECT_URL,
+      },
     });
   }
 }
@@ -155,6 +166,129 @@ if (inspected.length === 2) {
     dev.password !== test.password,
     "development and test use different credentials (separate projects)",
   );
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Read-only sign-in
+
+const SAFE_ERROR_DESCRIPTIONS = {
+  "28P01": "the password was rejected",
+  28000: "the role is not allowed to sign in",
+  "3D000": "the database does not exist",
+  "57P03": "the database is starting up; try again",
+  ENOTFOUND: "the host could not be found",
+  EAI_AGAIN: "the host could not be resolved (network issue)",
+  ECONNREFUSED: "the connection was refused",
+  ECONNRESET: "the connection was reset",
+  ETIMEDOUT: "the connection timed out",
+  SELF_SIGNED_CERT_IN_CHAIN: "the server certificate could not be verified",
+  UNABLE_TO_GET_ISSUER_CERT_LOCALLY:
+    "the server certificate could not be verified",
+};
+
+/** Describes a driver error by code only; the message itself may contain a host or role name. */
+function describeError(error) {
+  const code = typeof error?.code === "string" ? error.code : undefined;
+  if (code) {
+    return `${SAFE_ERROR_DESCRIPTIONS[code] ?? "connection failed"} (code ${code})`;
+  }
+  return /timeout/i.test(String(error?.message))
+    ? "the connection timed out"
+    : "connection failed (no error code)";
+}
+
+async function signIn(connectionString) {
+  const { default: pg } = await import("pg");
+  // pg already treats sslmode=require as verify-full (certificate and host verified); saying so explicitly keeps
+  // that behaviour and silences pg's deprecation warning. The env files themselves are not changed.
+  const url = new URL(connectionString);
+  url.searchParams.set("sslmode", "verify-full");
+  const client = new pg.Client({
+    connectionString: url.toString(),
+    connectionTimeoutMillis: 20_000, // allows for a Neon compute waking from scale-to-zero
+    query_timeout: 15_000,
+  });
+  // Without a listener, a late socket error would crash the process with a message that may include the host.
+  client.on("error", () => {});
+  try {
+    await client.connect();
+    await client.query("BEGIN READ ONLY");
+    const { rows } = await client.query(`
+      select current_database() as database,
+             current_user as role,
+             current_setting('transaction_read_only') as read_only,
+             current_setting('neon.tenant_id', true) as project_id,
+             (select coalesce(json_object_agg(table_schema, tables), '{}'::json)
+                from (select table_schema, count(*)::int as tables
+                        from information_schema.tables
+                       where table_type = 'BASE TABLE'
+                         and table_schema not in ('pg_catalog', 'information_schema')
+                       group by table_schema) per_schema) as tables_by_schema
+    `);
+    await client.query("ROLLBACK");
+    return { ok: true, row: rows[0] };
+  } catch (error) {
+    return { ok: false, reason: describeError(error) };
+  } finally {
+    await client.end().catch(() => {});
+  }
+}
+
+async function checkConnections(environments) {
+  const projectIds = [];
+  for (const environment of environments) {
+    console.log(`\nSign-in: ${environment.file}`);
+    for (const name of ["DATABASE_URL", "DIRECT_URL"]) {
+      const result = await signIn(environment.urls[name]);
+      if (!result.ok) {
+        report(false, `${name}: sign-in failed: ${result.reason}`);
+        continue;
+      }
+      const { row } = result;
+      report(true, `${name}: signed in`);
+      report(row.read_only === "on", `${name}: session was read-only`);
+      report(
+        row.database === environment.database && row.role === environment.user,
+        `${name}: connected to the database and role named in the file`,
+      );
+      // Schema names and counts only (e.g. "public: 0"); never table contents.
+      const schemas = Object.entries(row.tables_by_schema ?? {});
+      console.log(
+        `  [info] ${name}: tables by schema: ${
+          schemas.length === 0
+            ? "none"
+            : schemas.map(([schema, count]) => `${schema}: ${count}`).join(", ")
+        }`,
+      );
+      if (name === "DIRECT_URL") {
+        projectIds.push(row.project_id || null);
+      }
+    }
+  }
+
+  console.log("\nIsolation confirmed by the servers");
+  const [devId, testId] = projectIds;
+  if (devId && testId) {
+    report(
+      devId !== testId,
+      "development and test report different Neon project ids",
+    );
+  } else {
+    console.log(
+      "  [info] Neon did not expose a project id; isolation rests on the separate hosts and credentials above.",
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Run
+
+if (process.argv.includes("--connect")) {
+  if (failures > 0 || inspected.length !== 2) {
+    console.log("\nSkipping the sign-in check until the file checks pass.");
+  } else {
+    await checkConnections(inspected);
+  }
 }
 
 console.log(
