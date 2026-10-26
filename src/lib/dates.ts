@@ -303,3 +303,27 @@ export function fromDatabaseDate(value: Date): CalendarDate {
     value.getUTCDate(),
   );
 }
+
+// ---------------------------------------------------------------------------------------------------------------
+// Display
+
+const calendarFormatters = new Map<string, Intl.DateTimeFormat>();
+
+/**
+ * "Oct 3, 2026" (medium) or "October 3, 2026" (long), in en-US. A calendar date has no time zone, so it is formatted
+ * at UTC to keep the same day everywhere.
+ */
+export function formatCalendarDate(
+  date: CalendarDate,
+  style: "medium" | "long" = "medium",
+): string {
+  let formatter = calendarFormatters.get(style);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat("en-US", {
+      dateStyle: style,
+      timeZone: "UTC",
+    });
+    calendarFormatters.set(style, formatter);
+  }
+  return formatter.format(toDatabaseDate(date));
+}

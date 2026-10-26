@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, onTestFinished } from "vitest";
 
 import {
   addDays,
@@ -7,6 +7,7 @@ import {
   calendarDateInTimeZone,
   compareDates,
   dayOfWeek,
+  formatCalendarDate,
   daysBetween,
   daysInMonth,
   fromDatabaseDate,
@@ -222,5 +223,24 @@ describe("database boundary", () => {
       "2028-02-29",
     );
     expect(() => fromDatabaseDate(new Date("nope"))).toThrow(RangeError);
+  });
+});
+
+describe("formatCalendarDate", () => {
+  it("formats the same calendar day in every time zone", () => {
+    const date = parseCalendarDate("2026-01-01");
+    const originalTimeZone = process.env.TZ;
+    onTestFinished(() => {
+      process.env.TZ = originalTimeZone;
+    });
+    for (const timeZone of [
+      "UTC",
+      "America/Los_Angeles",
+      "Pacific/Kiritimati",
+    ]) {
+      process.env.TZ = timeZone;
+      expect(formatCalendarDate(date)).toBe("Jan 1, 2026");
+    }
+    expect(formatCalendarDate(date, "long")).toBe("January 1, 2026");
   });
 });
