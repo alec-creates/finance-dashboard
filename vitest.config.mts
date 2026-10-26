@@ -10,6 +10,8 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["src/**/*.test.ts", "tests/**/*.test.ts"],
+    // Database tests run separately (npm run test:integration) against the test database only.
+    exclude: ["tests/integration/**", "node_modules/**"],
     // Financial calculations must never depend on the machine's time zone.
     env: { TZ: "UTC" },
     // A run that finds no tests is a failure, and tests/required-suites.test.ts fails when a critical suite is
@@ -19,7 +21,7 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       include: ["src/**/*.ts"],
-      exclude: ["src/**/*.test.ts", "src/app/**"],
+      exclude: ["src/**/*.test.ts", "src/app/**", "src/generated/**"],
       thresholds: {
         "src/lib/**": {
           lines: 95,

@@ -15,6 +15,17 @@ const REQUIRED_SUITES = [
   "src/lib/dates.test.ts",
   "src/lib/schedules.test.ts",
   "src/lib/contributions.test.ts",
+  "src/server/db/environment.test.ts",
+  "src/server/env.test.ts",
+  "src/server/synthetic/generate.test.ts",
+  // Database integration suites (run with npm run test:integration against the test database).
+  "tests/integration/isolation.test.ts",
+  "tests/integration/ownership.test.ts",
+  "tests/integration/constraints.test.ts",
+  "tests/integration/invariants.test.ts",
+  "tests/integration/delete-behaviour.test.ts",
+  "tests/integration/precision.test.ts",
+  "tests/integration/synthetic-data.test.ts",
 ] as const;
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
