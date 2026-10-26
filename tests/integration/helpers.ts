@@ -1,42 +1,9 @@
 import { expect } from "vitest";
 
 import type { PrismaClient } from "../../src/generated/prisma/client";
-import { createPrismaClient } from "../../src/server/db/client";
-import { assertIsolatedTestDatabase } from "../../src/server/db/environment";
-import { developmentUrls } from "../../src/server/db/load-env";
+import { createTestPrisma, resetDatabase } from "../support/test-database";
 
-function assertTestDatabase(): void {
-  assertIsolatedTestDatabase({
-    databaseEnv: process.env.DATABASE_ENV,
-    databaseUrls: [process.env.DATABASE_URL, process.env.DIRECT_URL],
-    forbiddenUrls: developmentUrls(),
-  });
-}
-
-/** A client for the test database, created only after the isolation check passes. */
-export function createTestPrisma(): PrismaClient {
-  assertTestDatabase();
-  return createPrismaClient(process.env.DATABASE_URL as string);
-}
-
-/**
- * Empties every application table in the test database's public schema (never other schemas, never migration
- * history). Re-checks isolation first, so it can never run against development.
- */
-export async function resetDatabase(prisma: PrismaClient): Promise<void> {
-  assertTestDatabase();
-  const tables = await prisma.$queryRaw<{ tablename: string }[]>`
-    SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename <> '_prisma_migrations'`;
-  if (tables.length === 0) {
-    return;
-  }
-  const list = tables
-    .map(({ tablename }) => `"public"."${tablename.replaceAll('"', '""')}"`)
-    .join(", ");
-  await prisma.$executeRawUnsafe(
-    `TRUNCATE TABLE ${list} RESTART IDENTITY CASCADE`,
-  );
-}
+export { createTestPrisma, resetDatabase };
 
 /** Creates a user with an obviously synthetic email. */
 export async function createUser(prisma: PrismaClient, label: string) {
