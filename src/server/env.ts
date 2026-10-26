@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { DATABASE_ENVIRONMENTS } from "./db/environment";
+import { assertDeploymentConfiguration } from "./deployment";
 
 const serverEnvSchema = z.object({
   DATABASE_URL: z
@@ -33,6 +34,10 @@ export function parseServerEnv(
 let cached: ServerEnv | undefined;
 
 export function getServerEnv(): ServerEnv {
+  if (!cached) {
+    // Refuse to reach any database from a deployment configured for another one.
+    assertDeploymentConfiguration(process.env);
+  }
   cached ??= parseServerEnv(process.env);
   return cached;
 }

@@ -1,7 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
+import { TestingBanner } from "@/components/app-shell/testing-banner";
 import { THEME_INIT_SCRIPT } from "@/lib/theme";
+import { isTestingState } from "@/server/deployment";
 
 import "./globals.css";
 
@@ -41,7 +43,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
-      <body className="flex min-h-full flex-col">{children}</body>
+      <body className="flex min-h-full flex-col">
+        {/* Fixed per deployment: env values are read when the page is built. */}
+        {isTestingState(process.env) ? <TestingBanner /> : null}
+        {children}
+      </body>
     </html>
   );
 }

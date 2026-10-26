@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { assertDeploymentConfiguration } from "../deployment";
+
 const authEnvSchema = z.object({
   BETTER_AUTH_SECRET: z
     .string()
@@ -36,6 +38,9 @@ export function parseAuthEnv(
 let cached: AuthEnv | undefined;
 
 export function getAuthEnv(): AuthEnv {
+  if (!cached) {
+    assertDeploymentConfiguration(process.env);
+  }
   cached ??= parseAuthEnv(process.env);
   return cached;
 }
