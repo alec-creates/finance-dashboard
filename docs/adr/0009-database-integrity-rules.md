@@ -21,13 +21,22 @@ delete behaviour, and rules (first-of-month budgets, fraction ranges) that only 
   boolean on the account instead of an id array.
 - **Explicit `onDelete` behaviour:** cascade from the user; undo-import deletes that batch's transactions; accounts,
   categories, merchants and assets with history are archived, not deleted; plans, series and goals are soft deleted.
+  "Restricted" relations are `NO ACTION` (end-of-statement check) so a cascading user delete works; composite relations
+  never `SET NULL` (it would null `userId`); every foreign key is `ON UPDATE NO ACTION` so ownership cannot move.
 - **SQL constraints in migrations** for rules Prisma cannot express (first-of-month budgets, investment type iff
-  investment account, fractions in 0..1, non-negative amounts, per-parent unique category names).
-- **App-level invariants** with tests and an integrity-check query where a constraint would need triggers: split sums,
-  allocation share sums, goal allocations within balance, budget hierarchy.
+  investment account, fractions in 0..1, non-negative amounts, USD-only accounts, investment cash directions,
+  goal-ledger signs, case-insensitive per-parent unique category names). Prisma leaves them in place: a drift check
+  after the first migration produced an empty migration.
+- **Deferred constraint triggers** (checked at commit) for the two invariants that span rows: splits sum exactly to
+  their transaction (and every transaction has a split), and contribution allocation shares sum to exactly 1.
+- **App-level invariants** with tests where the database cannot reasonably check: goal allocations within balance,
+  budget hierarchy, transfer legs netting to zero, sign-versus-kind consistency.
 
 ## Consequences
 
 - Cross-user references are impossible even if a service has a bug.
 - Every importer must translate signs; adapter tests must cover it.
 - Composite relations make the Prisma schema more verbose; the trade is worth it for financial data.
+- Writes that create a transaction must create its splits in the same database transaction (nested create or
+  `$transaction`); otherwise the commit is rejected.
+- Nested Prisma creates fill `userId` from the parent; services must not pass it for nested children.

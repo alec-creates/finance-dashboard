@@ -40,7 +40,9 @@ src/
   app/            Routes, layouts, Server Actions (thin: parse input -> call a service -> return)
   components/     UI components (no data access); dashboard widgets + widget registry (ADR-0005)
   server/         Server-only code
-    db/           Prisma client
+    db/           Prisma client (pg adapter), environment guards and env loading (ADR-0008)
+    synthetic/    Deterministic synthetic data generator and persistence (dev seed, tests, demo)
+    env.ts        Zod-validated server configuration
     services/     Business logic; the ONLY layer that touches the database. Every query is scoped by userId.
     integrations/ Provider adapters behind one interface (CSV, Kraken, Plaid, ...)
   lib/            Pure, framework-free logic: money, decimal, dates, categorization, forecasting math
@@ -51,7 +53,10 @@ src/
     dates.ts         CalendarDate / YearMonth, month math, time zones, database DATE boundary
     schedules.ts     Recurring schedules for pay, contributions and bills (ADR-0006)
     contributions.ts Contribution targets (fixed, % of income, % of paycheck), splits, planned contributions
-tests/            Integration and E2E tests, synthetic fixtures (tests/fixtures/), required-suite guard
+tests/            Integration (tests/integration, test database only) and E2E tests, required-suite guard
+prisma/           schema.prisma, migrations (with hand-written constraint SQL), seed.ts
+scripts/          db.ts (guarded Prisma CLI wrapper), check-db-env.mjs, db-row-counts.ts
+src/generated/    Prisma client output (gitignored, created by `prisma generate` on install)
 docs/             Data model, integration research, ADRs (docs/adr/)
 ```
 
@@ -116,16 +121,22 @@ disabled; do not build multi-user administration or subscriptions.
 
 ## Commands
 
-| Command                       | Purpose                                                          |
-| ----------------------------- | ---------------------------------------------------------------- |
-| `npm run dev`                 | Start the dev server on http://localhost:3000                    |
-| `npm run check`               | Format check, lint, typecheck, unit tests (CI)                   |
-| `npm run build`               | Production build                                                 |
-| `npm test`                    | Run Vitest once (`npm run test:watch` to iterate)                |
-| `npm run format`              | Apply Prettier                                                   |
-| `npm run test:coverage`       | Coverage report in `coverage/`                                   |
-| `npm run db:check-env`        | Validate local database env files (no values shown)              |
-| `npm run db:check-connection` | Same, plus a read-only sign-in to dev and test (no values shown) |
+| Command                       | Purpose                                                                 |
+| ----------------------------- | ----------------------------------------------------------------------- |
+| `npm run dev`                 | Start the dev server on http://localhost:3000                           |
+| `npm run check`               | Format check, lint, typecheck, unit tests (CI)                          |
+| `npm run build`               | Production build                                                        |
+| `npm test`                    | Run Vitest once (`npm run test:watch` to iterate)                       |
+| `npm run format`              | Apply Prettier                                                          |
+| `npm run test:coverage`       | Coverage report in `coverage/`                                          |
+| `npm run db:check-env`        | Validate local database env files (no values shown)                     |
+| `npm run db:check-connection` | Same, plus a read-only sign-in to dev and test (no values shown)        |
+| `npm run db:migrate`          | Create/apply migrations on the **development** database (`-- --name x`) |
+| `npm run db:migrate:create`   | Create a migration without applying it (to add hand-written SQL)        |
+| `npm run db:migrate:test`     | Apply migrations to the test database (`migrate deploy` only)           |
+| `npm run db:status`           | Migration status of the development database                            |
+| `npm run db:seed`             | Replace the synthetic demo user's data in development                   |
+| `npm run test:integration`    | Database tests against the test database (not in CI: no credentials)    |
 
 ## Development workflow
 
@@ -136,7 +147,11 @@ disabled; do not build multi-user administration or subscriptions.
    `.only`/`.skip`, and `npm run test:coverage` enforces 95% line coverage on `src/lib`.
 4. Use the `src/lib` helpers instead of inline math: never `parseFloat`, `Number(amount)` or `/ 100` on money, and pass
    decimal values as strings (the helpers reject float inputs).
-5. Run `npm run check` (and `npm run build` for route/config changes) before committing.
+5. Run `npm run check` (and `npm run build` for route/config changes) before committing. For schema or database
+   changes also run `npm run test:integration`. Never run Prisma database commands directly: `prisma.config.ts`
+   refuses them unless they come through `scripts/db.ts`, which verifies the target and redacts Prisma's output.
+   Schema changes: edit `schema.prisma`, `npm run db:migrate:create -- --name x`, add any constraint SQL, review, then
+   `npm run db:migrate`.
 6. Update `TASKS.md`, and docs/ADRs when a decision changes. Then stop and summarize for review.
 
 ## Key documents

@@ -15,17 +15,20 @@ and a polished default dashboard built from reusable widgets, deployed with synt
       (fractions, shares, ratios), `dates.ts` (calendar dates, months, time zones), `schedules.ts` (weekly, biweekly,
       semimonthly, monthly, every N days/months, weekend adjustment), `contributions.ts` (fixed / % of income /
       % of paycheck targets, splits); unit tests; test run fails if a required suite is missing
-- [ ] **3. Database**
+- [x] **3. Database**
   - [x] Design review: 11 fixes applied to `docs/data-model.md` (ADR-0009); isolated environments (ADR-0008)
   - [x] Local env files with placeholders (gitignored) and `npm run db:check-env`
   - [x] Owner creates Neon projects `finance-dashboard-dev` and `finance-dashboard-test` and fills in the env files;
         `npm run db:check-env` and `npm run db:check-connection` pass (2026-10-26)
-  - [ ] Prisma 7.10.1 (pinned), `prisma.config.ts`, full schema from `docs/data-model.md` with composite ownership
-        relations, SQL constraints, first migration on dev and test
-  - [ ] Env validation (Zod) and test-database guard (`DATABASE_ENV=test`, host differs from development)
-  - [ ] Deterministic synthetic data generator (about 18 months: bank, card, taxable brokerage and crypto accounts,
-        several pay and contribution schedules, including 3-paycheck months)
-  - [ ] Integration tests: ownership isolation, sign convention, constraints, delete behaviour
+  - [x] Prisma 7.10.1 (pinned) with the pg adapter, `prisma.config.ts`, 33-table schema with composite ownership
+        relations, 40 CHECK constraints, deferred split-sum and allocation-share triggers; `init` migration applied
+        to development (test database migrated by the integration suite with `migrate deploy`)
+  - [x] Env validation (Zod), guarded Prisma wrapper (`scripts/db.ts`), test-database guard (`DATABASE_ENV=test`,
+        host differs from development), redacted Prisma output
+  - [x] Deterministic synthetic data generator (18 months: checking, savings, card, taxable brokerage, Roth IRA and
+        crypto; biweekly pay with 3-paycheck months; weekly and monthly contributions); dev seeded
+  - [x] Integration tests (31): isolation, ownership, constraints, deferred invariants, delete behaviour, precision,
+        synthetic dataset integrity
 - [ ] **4. Authentication**: Better Auth, single allowlisted email, no public sign-up, second factor, protected routes,
       user-ownership test
 - [ ] **5. App shell**: shadcn/ui, mobile bottom tabs / desktop sidebar, light/dark, PWA manifest and icons

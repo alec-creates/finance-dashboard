@@ -24,18 +24,24 @@ PostgreSQL (Neon) · Better Auth · Zod · Vitest · Playwright · Vercel
 
 ## Getting started
 
-Prerequisites: Node.js 22+ and npm. Docker is not required; the database is a free Neon Postgres branch (from Phase 1
-Task 3).
+Prerequisites: Node.js 22+ and npm. Docker is not required: development and tests each use their own free Neon
+Postgres project (ADR-0008).
 
 ```bash
-npm install
+npm install            # also generates the Prisma client
+npm run db:check-env   # validates .env.local / .env.test.local without printing values
+npm run db:migrate     # applies migrations to the development database
+npm run db:seed        # loads 18 months of synthetic data
 npm run dev
 ```
 
 Open http://localhost:3000.
 
-Configuration: copy `.env.example` to `.env.local` and fill in values as each task requires them. Never commit
-`.env.local`.
+Configuration: create `.env.local` (development) and `.env.test.local` (tests) from `.env.example`. Both are
+gitignored; never commit them. The repository and its seed contain synthetic data only.
+
+Testing: `npm test` runs unit tests (also in CI). `npm run test:integration` runs database tests against the test
+database only; it refuses to start unless `DATABASE_ENV=test` and the test database differs from development.
 
 ## Scripts
 

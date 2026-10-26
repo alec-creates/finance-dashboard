@@ -55,6 +55,11 @@ convert their own conventions on import (Plaid, for example, reports card balanc
 | Financial account, category, merchant, asset | Restricted while history references them; archive instead (`archivedAt`)                     |
 | Contribution plan, recurring series, goal    | Soft delete (`deletedAt` / `status`) so matched history keeps its link                       |
 
+"Restricted" relations use `NO ACTION` (checked at the end of the statement) rather than `RESTRICT`, so deleting a user
+can remove parents and children in one cascading statement. Optional composite relations never use `SET NULL`, which
+would also null `userId`. Every foreign key is `ON UPDATE NO ACTION`: a row's owner can never be changed while other
+rows refer to it.
+
 **Database constraints** added as SQL in the migration where Prisma cannot express them:
 
 - `Budget.month` is the first day of a month.
@@ -63,12 +68,23 @@ convert their own conventions on import (Plaid, for example, reports card balanc
 - Non-negative amounts: budgets, minimums, fixed contribution amounts, overrides, goal targets, tolerances,
   `minimumBalanceCents`.
 - `ContributionOverride` either skips or has an amount.
-- Category names are unique per user and parent (`NULLS NOT DISTINCT`, so top-level names are unique too); merchant
-  match keys are unique per user.
+- Category names are unique per user and parent, case-insensitive (`NULLS NOT DISTINCT`, so top-level names are
+  unique too); merchant match keys are unique per user.
+- Accounts are USD-only for now; Safe to Spend applies only to checking, savings and cash accounts.
+- Investment transactions: quantities, prices, fees and USD values are non-negative magnitudes; cash moves in the
+  direction the type implies (BUY/FEE/WITHDRAWAL <= 0; SELL/DIVIDEND/INTEREST/DEPOSIT >= 0); BUY, SELL and
+  STAKING_REWARD need an asset and a positive quantity; staking rewards need a USD value; tax years only on deposits.
+- Goal ledger signs follow the entry type (ALLOCATE > 0, RELEASE/WITHDRAW < 0); net worth liabilities <= 0.
 
-**App-level invariants** (enforced in services, covered by tests, and checked by an integrity query): splits sum
-exactly to their transaction's amount; allocation shares sum to exactly 1; goal allocations on an account do not
-exceed its balance; budget hierarchy (below).
+**Deferred invariants** (constraint triggers checked at `COMMIT`, so a parent and its children can be written in any
+order within one database transaction):
+
+- Every transaction has at least one split, and its splits sum exactly to `amountCents`.
+- A contribution plan's allocation shares sum to exactly 1 whenever it has allocations.
+
+**App-level invariants** (enforced in services and covered by tests): goal allocations on an account do not exceed
+its balance; budget hierarchy (below); category parents share their child's type; both legs of a transfer net to zero;
+a transaction's sign matches its kind; contribution targets are investment accounts.
 
 **Every table** has `createdAt` and `updatedAt`. IDs are `cuid()` strings.
 
@@ -217,7 +233,8 @@ model InvestmentTransaction {
   type InvTxnType  // BUY | SELL | DIVIDEND | INTEREST | FEE | DEPOSIT | WITHDRAWAL | TRANSFER_IN | TRANSFER_OUT
                    // | STAKING_REWARD | SPLIT | CORPORATE_ACTION | OTHER
   quantity Decimal(38,18)?, unitPrice Decimal(24,10)?
-  cashAmountCents Int              // signed effect on the account's USD cash (0 for crypto-to-crypto legs)
+  cashAmountCents Int              // total signed effect on the account's USD cash, fees included
+                                   // (0 for crypto-to-crypto legs); feeCents breaks the fee out
   usdValueCents Int?               // fair USD value of this leg at trade time; required when there is no USD cash
                                    // leg (crypto-to-crypto trades, staking rewards, transfers in) so cost basis works
   usdValueSource ValuationSource?  // PROVIDER | PRICE_HISTORY | MANUAL
