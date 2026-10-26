@@ -51,7 +51,7 @@ dashboard, all responsive on phone and desktop at $0 recurring cost.
       server-side `requireUser()` / `requireApiUser()`; `/setup`, `/sign-in`, `/two-factor`, `/security/two-factor`,
       `/settings/security`; protected `GET /api/accounts`; unit, proxy and integration tests (owner-only sign-up,
       sessions, logout, expiry, 2FA, rate limits, lockout, API authorization)
-- [ ] **5. App shell (trimmed)**: shadcn/ui, responsive navigation, light/dark mode, consistent auth pages,
+- [x] **5. App shell (trimmed)**: shadcn/ui, responsive navigation, light/dark mode, consistent auth pages,
       placeholder pages
   - Acceptance:
     - shadcn/ui is set up for Tailwind 4, and only the components in use are added.
@@ -67,6 +67,10 @@ dashboard, all responsive on phone and desktop at $0 recurring cost.
     - No horizontal scrolling at 375 px wide; works at desktop widths.
     - `npm run check` and `npm run build` pass.
   - Deferred: the PWA manifest and icons move to Task 8 (installing needs HTTPS); PWA polish stays in Phase 7.
+  - Done (2026-10-26): shadcn/ui 4.22 (Radix base, Nova preset) with clsx + tailwind-merge; sidebar from 768 px, bottom
+    tab bar below; theme script tested by executing it against a fake DOM; placeholders for Transactions, Budgets and
+    Accounts; Settings with appearance and security. Checked in a browser at 375 px and 1280 px, light and dark,
+    keyboard only (skip link, menus, Escape), sign-out from the account menu.
 - [ ] **6. Accounts**: create, edit and archive accounts of every type, with manual balance snapshots
   - Acceptance:
     - Account types: checking, savings, credit card, investment (with its type: taxable, Traditional IRA, Roth IRA,
