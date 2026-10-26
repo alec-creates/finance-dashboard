@@ -97,6 +97,18 @@ preferences. Code may ship editable _defaults_ (a starter category set, a defaul
 contribution), but no logic may depend on a specific name or amount. Keep the app single-user with registration
 disabled; do not build multi-user administration or subscriptions.
 
+## Authentication rules (ADR-0010)
+
+- Use Better Auth's built-in features only; no custom password, session or token handling.
+- Every page that shows or changes data calls `requireUser()` (`src/server/auth/session.ts`) inside a `<Suspense>`
+  boundary; every API route handler starts with `requireApiUser(request)` (`src/server/auth/request.ts`). The proxy
+  (`src/proxy.ts`) is only an optimistic redirect, never the security boundary.
+- Services take `userId` from the authenticated user, never from request input.
+- Only `OWNER_EMAIL` can create the account or hold a session; 2FA (TOTP) is mandatory before any financial page or
+  API. Never weaken these hooks for convenience.
+- Never log or display passwords, session tokens, TOTP secrets, backup codes or `BETTER_AUTH_SECRET`; never send
+  session tokens to client components. User-facing auth errors go through `describeAuthError()`.
+
 ## Security and privacy rules
 
 - Secrets only in `.env.local` (development), `.env.test.local` (tests) and Vercel project settings (production).
@@ -131,6 +143,7 @@ disabled; do not build multi-user administration or subscriptions.
 | `npm run test:coverage`       | Coverage report in `coverage/`                                          |
 | `npm run db:check-env`        | Validate local database env files (no values shown)                     |
 | `npm run db:check-connection` | Same, plus a read-only sign-in to dev and test (no values shown)        |
+| `npm run auth:setup-env`      | Add missing auth settings (random secrets) to both env files, unprinted |
 | `npm run db:migrate`          | Create/apply migrations on the **development** database (`-- --name x`) |
 | `npm run db:migrate:create`   | Create a migration without applying it (to add hand-written SQL)        |
 | `npm run db:migrate:test`     | Apply migrations to the test database (`migrate deploy` only)           |

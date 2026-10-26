@@ -14,3 +14,4 @@ accepted ADR: supersede it with a new one.
 | [0007](0007-investment-account-types.md)         | Investment account types, including retirement accounts             | Accepted                                     |
 | [0008](0008-isolated-database-environments.md)   | Isolated database environments: one Neon project each               | Accepted                                     |
 | [0009](0009-database-integrity-rules.md)         | Database integrity rules: ownership, signs, deletes and constraints | Accepted                                     |
+| [0010](0010-authentication.md)                   | Authentication: Better Auth, owner-only, password + TOTP            | Accepted                                     |

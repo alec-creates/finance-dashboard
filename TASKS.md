@@ -29,8 +29,12 @@ and a polished default dashboard built from reusable widgets, deployed with synt
         crypto; biweekly pay with 3-paycheck months; weekly and monthly contributions); dev seeded
   - [x] Integration tests (31): isolation, ownership, constraints, deferred invariants, delete behaviour, precision,
         synthetic dataset integrity
-- [ ] **4. Authentication**: Better Auth, single allowlisted email, no public sign-up, second factor, protected routes,
-      user-ownership test
+- [x] **4. Authentication** (ADR-0010): Better Auth 1.7.13; owner-only sign-up and sessions via `OWNER_EMAIL`
+      hooks; password (12+ chars, breach check) + mandatory TOTP 2FA with backup codes and account lockout; 7-day
+      database sessions, sign-out and sign-out-everywhere; database-backed rate limits; Next.js 16 proxy plus
+      server-side `requireUser()` / `requireApiUser()`; `/setup`, `/sign-in`, `/two-factor`, `/security/two-factor`,
+      `/settings/security`; protected `GET /api/accounts`; unit, proxy and integration tests (owner-only sign-up,
+      sessions, logout, expiry, 2FA, rate limits, lockout, API authorization)
 - [ ] **5. App shell**: shadcn/ui, mobile bottom tabs / desktop sidebar, light/dark, PWA manifest and icons
 - [ ] **6. Accounts**: create/edit/archive accounts of every type (checking, savings, credit card, investment with
       type, other assets/liabilities), optional minimum balance, manual balance snapshots, "last updated"

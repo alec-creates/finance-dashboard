@@ -91,10 +91,10 @@ a transaction's sign matches its kind; contribution targets are investment accou
 ## Identity and settings
 
 ```prisma
-model User         { id, name, email @unique, emailVerified, image?, createdAt, updatedAt }
-                   // Shape owned by Better Auth: generated with its CLI together with Session, Account (auth
-                   // provider links, not financial accounts), Verification and the 2FA/passkey plugin tables.
-                   // All app tables reference User.id with onDelete: Cascade.
+model User         { id, name, email @unique, emailVerified, image?, twoFactorEnabled, createdAt, updatedAt }
+                   // Shape owned by Better Auth (ADR-0010), with Session, Account (sign-in methods, not financial
+                   // accounts), Verification, TwoFactor (encrypted TOTP secret and backup codes, lockout state) and
+                   // RateLimit (database-backed rate-limit buckets). All app tables reference User.id with onDelete: Cascade.
 model UserSettings {
   userId PK, timeZone String,               // IANA, e.g. "America/Chicago"
   currency String @default("USD"),

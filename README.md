@@ -29,13 +29,16 @@ Postgres project (ADR-0008).
 
 ```bash
 npm install            # also generates the Prisma client
+npm run auth:setup-env # adds random auth secrets to the env files (then set OWNER_EMAIL in .env.local)
 npm run db:check-env   # validates .env.local / .env.test.local without printing values
 npm run db:migrate     # applies migrations to the development database
 npm run db:seed        # loads 18 months of synthetic data
 npm run dev
 ```
 
-Open http://localhost:3000.
+Open http://localhost:3000/setup once to create the owner account (only `OWNER_EMAIL` is accepted, and only once),
+then set up two-factor authentication with an authenticator app. Afterwards sign in at http://localhost:3000/sign-in.
+There is no public registration and no social login (ADR-0010).
 
 Configuration: create `.env.local` (development) and `.env.test.local` (tests) from `.env.example`. Both are
 gitignored; never commit them. The repository and its seed contain synthetic data only.
