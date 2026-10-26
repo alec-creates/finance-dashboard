@@ -1,13 +1,14 @@
 import { LayoutDashboardIcon } from "lucide-react";
 import { Suspense } from "react";
 
+import { AccountRow } from "@/components/accounts/account-row";
 import { ComingSoon } from "@/components/app-shell/coming-soon";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { requireUser } from "@/server/auth/session";
 import { getPrisma } from "@/server/db/client";
-import { listAccounts } from "@/server/services/accounts";
+import { listAccountsWithBalances } from "@/server/services/accounts";
 
 export default function HomePage() {
   return (
@@ -26,7 +27,9 @@ export default function HomePage() {
 async function AccountList() {
   // Every data read starts from the authenticated user; userId never comes from the request.
   const user = await requireUser();
-  const accounts = await listAccounts(getPrisma(), user.id);
+  const accounts = (
+    await listAccountsWithBalances(getPrisma(), user.id)
+  ).filter((account) => !account.archivedAt);
   if (accounts.length === 0) {
     return (
       <ComingSoon
@@ -50,15 +53,7 @@ async function AccountList() {
       <CardContent className="px-0">
         <ul className="divide-y border-t">
           {accounts.map((account) => (
-            <li
-              key={account.id}
-              className="flex items-center justify-between gap-4 px-4 py-3 text-sm"
-            >
-              <span className="truncate font-medium">{account.name}</span>
-              <span className="shrink-0 text-muted-foreground">
-                {account.institutionName ?? account.type}
-              </span>
-            </li>
+            <AccountRow key={account.id} account={account} />
           ))}
         </ul>
       </CardContent>

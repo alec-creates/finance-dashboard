@@ -2,20 +2,51 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Suspense } from "react";
 
 import { isActivePath } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
 
 import { NAV_ITEMS } from "./nav-items";
 
+/*
+ * With Cache Components, usePathname suspends on routes with dynamic segments (/accounts/[id]) while the static
+ * shell is prerendered. Each nav renders without an active item until the pathname is known, instead of holding back
+ * the whole layout.
+ */
+
 /** Vertical section list for the desktop sidebar. */
 export function SidebarNav() {
-  const pathname = usePathname();
+  return (
+    <Suspense fallback={<SidebarNavList pathname={null} />}>
+      <SidebarNavWithPathname />
+    </Suspense>
+  );
+}
+
+/** Bottom tab bar for phones. Pads itself above the home indicator. */
+export function MobileTabBar() {
+  return (
+    <Suspense fallback={<MobileTabBarList pathname={null} />}>
+      <MobileTabBarWithPathname />
+    </Suspense>
+  );
+}
+
+function SidebarNavWithPathname() {
+  return <SidebarNavList pathname={usePathname()} />;
+}
+
+function MobileTabBarWithPathname() {
+  return <MobileTabBarList pathname={usePathname()} />;
+}
+
+function SidebarNavList({ pathname }: { pathname: string | null }) {
   return (
     <nav aria-label="Main">
       <ul className="space-y-1">
         {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-          const active = isActivePath(pathname, href);
+          const active = pathname !== null && isActivePath(pathname, href);
           return (
             <li key={href}>
               <Link
@@ -39,9 +70,7 @@ export function SidebarNav() {
   );
 }
 
-/** Bottom tab bar for phones. Pads itself above the home indicator. */
-export function MobileTabBar() {
-  const pathname = usePathname();
+function MobileTabBarList({ pathname }: { pathname: string | null }) {
   return (
     <nav
       aria-label="Main"
@@ -49,7 +78,7 @@ export function MobileTabBar() {
     >
       <ul className="mx-auto grid max-w-lg grid-cols-5">
         {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-          const active = isActivePath(pathname, href);
+          const active = pathname !== null && isActivePath(pathname, href);
           return (
             <li key={href}>
               <Link
