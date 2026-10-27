@@ -14,7 +14,7 @@ const pkg = JSON.parse(read("package.json")) as {
 const release = read(".github/workflows/release-production.yml");
 const ci = read(".github/workflows/ci.yml");
 const vercel = JSON.parse(read("vercel.json")) as {
-  git?: { deploymentEnabled?: Record<string, boolean> };
+  git?: { deploymentEnabled?: boolean | Record<string, boolean> };
   buildCommand?: string;
 };
 
@@ -29,9 +29,10 @@ describe("application builds never touch the database schema", () => {
     },
   );
 
-  it("Vercel uses the default build and never deploys main on its own", () => {
+  it("Vercel uses the default build and never deploys from Git on its own", () => {
     expect(vercel.buildCommand).toBeUndefined();
-    expect(vercel.git?.deploymentEnabled?.main).toBe(false);
+    // All branches: production deploys come only from the release workflow, and there are no preview builds.
+    expect(vercel.git?.deploymentEnabled).toBe(false);
   });
 
   it("CI never sees production secrets", () => {
@@ -83,8 +84,43 @@ describe("the release workflow", () => {
     );
   });
 
-  it("requires a typed confirmation and checks main has not moved before deploying", () => {
+  it("requires a typed confirmation and releases only the latest main, checked before migrating", () => {
     expect(release).toContain("inputs.confirm != 'release production'");
-    expect(release).toContain('if [ "$head" != "$GITHUB_SHA" ]');
+    const headCheck = release.indexOf('if [ "$head" != "$GITHUB_SHA" ]');
+    expect(headCheck).toBeGreaterThan(-1);
+    expect(headCheck).toBeLessThan(release.indexOf("db:production:check"));
+  });
+
+  it("deploys exactly this run's commit, after migrations, with the pinned Vercel CLI", () => {
+    const deploy = release.slice(release.indexOf("Prepare a clean copy"));
+    expect(release.indexOf("Prepare a clean copy")).toBeGreaterThan(
+      release.indexOf("db:production:verify-current"),
+    );
+    expect(deploy).toContain(
+      'git worktree add --detach "$RUNNER_TEMP/release" "$GITHUB_SHA"',
+    );
+    expect(deploy).toContain("working-directory: ${{ runner.temp }}/release");
+    expect(deploy).toMatch(
+      /run: npx --yes vercel@\d+\.\d+\.\d+ deploy --prod --yes --meta "githubCommitSha=\$GITHUB_SHA"\n/,
+    );
+  });
+
+  it("never pulls production variables, builds locally or passes the token on the command line", () => {
+    expect(release).not.toMatch(/vercel(@[\d.]+)? (pull|build)\b/);
+    expect(release).not.toContain("--prebuilt");
+    expect(release).not.toContain("--token");
+    expect(release).not.toMatch(/DEPLOY_HOOK|curl /);
+  });
+
+  it("exposes each secret only to the steps that need it", () => {
+    const steps = release.split(/\n {6}- /);
+    const using = (secret: string) =>
+      steps.filter((step) => step.includes(`secrets.${secret}`));
+    expect(using("PRODUCTION_DIRECT_URL")).toHaveLength(3);
+    for (const step of using("PRODUCTION_DIRECT_URL")) {
+      expect(step).toMatch(/npm run db:production:/);
+    }
+    expect(using("VERCEL_TOKEN")).toHaveLength(1);
+    expect(using("VERCEL_TOKEN")[0]).toContain("deploy --prod");
   });
 });

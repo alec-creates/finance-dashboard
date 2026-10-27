@@ -140,14 +140,15 @@ dashboard, all responsive on phone and desktop at $0 recurring cost.
       test database. A signed-out visit to every section redirects to sign-in.
     - **Testing state:** production shows a persistent "Testing - do not enter real financial data" banner until gate B
       is signed off. Only invented test data may be entered.
-  - Progress (2026-10-26), code ready: release workflow with preflight, `migrate deploy` and postflight, then a Vercel
-    deploy hook; production-only database guard (workflow, `main`, direct connection, fingerprint, failed/unknown
-    migrations); `vercel.json` stops automatic `main` deploys; runtime checks that keep each deployment on its own
-    database; testing banner; PWA manifest and icons; Playwright smoke tests (desktop and phone); guard tests for the
-    deployment configuration; `docs/deployment.md` and ADR-0011.
-  - Remaining (owner, then checks): create the Neon production project, the Vercel project and the GitHub
-    `production` environment (docs/deployment.md); run `status`, then the first `release`; confirm the deploy hook
-    creates a Production deployment; create the owner account and 2FA on production; run the production checks above.
+  - Progress (2026-10-27), code ready: release workflow with a head-of-main check, preflight, `migrate deploy` and
+    postflight, then `vercel deploy --prod` (pinned CLI) from a clean worktree of the exact commit; production-only
+    database guard (workflow, `main`, direct connection, fingerprint, failed/unknown migrations); `vercel.json`
+    disables Git deployments for every branch; runtime checks that keep each deployment on its own database; testing
+    banner; PWA manifest and icons; Playwright smoke tests (desktop and phone); guard tests for the deployment
+    configuration; `docs/deployment.md` and ADR-0011.
+  - Remaining (owner, then checks): create the Neon production project, the Vercel project with its project-scoped
+    token, and the GitHub `production` environment (docs/deployment.md); run `status`, then the first `release`;
+    create the owner account and 2FA on production; run the production checks above.
 - [ ] **9. CSV import and backup/recovery**: a minimal import pipeline plus a documented, tested recovery procedure
   - CSV import acceptance:
     - Upload (size-limited, parsed on the server) -> column mapping -> preview with per-row errors -> confirm -> report

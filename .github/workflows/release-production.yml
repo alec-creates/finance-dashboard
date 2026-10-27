@@ -5,7 +5,11 @@ name: Release production
 # secrets and requires the owner's approval before any job that uses them starts.
 #
 #   status:  read-only preflight (database identity, applied and pending migrations)
-#   release: preflight -> prisma migrate deploy -> verify nothing is pending -> deploy the app on Vercel
+#   release: preflight -> prisma migrate deploy -> verify nothing is pending -> deploy this exact commit to Vercel
+#
+# The app is deployed with the pinned Vercel CLI from a clean checkout of this run's commit, so production runs exactly
+# the reviewed code. Vercel builds it with the project's Production variables; no production variable is ever pulled
+# into this runner. Git-triggered Vercel deployments are disabled (vercel.json).
 on:
   workflow_dispatch:
     inputs:
@@ -49,6 +53,16 @@ jobs:
         with:
           persist-credentials: false
 
+      # Release only the latest main: an older commit must never migrate or replace newer code.
+      - name: Check this commit is the head of main
+        if: inputs.action == 'release'
+        run: |
+          head="$(git ls-remote "https://github.com/${GITHUB_REPOSITORY}.git" refs/heads/main | cut -f1)"
+          if [ "$head" != "$GITHUB_SHA" ]; then
+            echo "main has moved since this run started; start a new release from the latest main."
+            exit 1
+          fi
+
       - uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
@@ -78,18 +92,22 @@ jobs:
         env:
           DIRECT_URL: ${{ secrets.PRODUCTION_DIRECT_URL }}
 
-      # The deploy hook builds the latest main, so only release if this run's commit still is the latest main.
-      - name: Check this commit is still the head of main
+      # Only this commit's tracked files: no node_modules, build output or generated client from the steps above.
+      - name: Prepare a clean copy of this commit
         if: inputs.action == 'release'
         run: |
-          head="$(git ls-remote "https://github.com/${GITHUB_REPOSITORY}.git" refs/heads/main | cut -f1)"
-          if [ "$head" != "$GITHUB_SHA" ]; then
-            echo "main moved after this run started; start a new release from the latest main."
-            exit 1
-          fi
+          git worktree add --detach "$RUNNER_TEMP/release" "$GITHUB_SHA"
+          test "$(git -C "$RUNNER_TEMP/release" rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git -C "$RUNNER_TEMP/release" status --porcelain --ignored)"
 
-      - name: Deploy the app on Vercel
+      # Pinned CLI (reads VERCEL_TOKEN from the environment, so the token is never a command-line argument). Vercel builds
+      # the uploaded commit with the project's Production variables, and the step waits for the result.
+      - name: Deploy this commit to Vercel production
         if: inputs.action == 'release'
-        run: curl --fail --silent --show-error --output /dev/null --request POST "$VERCEL_DEPLOY_HOOK"
+        working-directory: ${{ runner.temp }}/release
+        run: npx --yes vercel@64.0.2 deploy --prod --yes --meta "githubCommitSha=$GITHUB_SHA"
         env:
-          VERCEL_DEPLOY_HOOK: ${{ secrets.VERCEL_PRODUCTION_DEPLOY_HOOK }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+          VERCEL_TELEMETRY_DISABLED: "1"
